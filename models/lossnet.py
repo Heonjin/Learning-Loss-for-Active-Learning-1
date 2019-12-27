@@ -23,6 +23,8 @@ class LossNet(nn.Module):
         self.FC4 = nn.Linear(num_channels[3], interm_dim)
 
         self.linear = nn.Linear(4 * interm_dim, 1)
+        
+        self.is_norm = False
     
     def forward(self, features):
         out1 = self.GAP1(features[0])
@@ -41,5 +43,22 @@ class LossNet(nn.Module):
         out4 = out4.view(out4.size(0), -1)
         out4 = F.relu(self.FC4(out4))
 
-        out = self.linear(torch.cat((out1, out2, out3, out4), 1))
-        return out
+        out = torch.cat((out1, out2, out3, out4), 1)
+        if self.is_norm:
+            features = self.l2_norm(out)
+        out = self.linear(out)
+        
+        return out, features
+    
+    def l2_norm(self,input):
+        input_size = input.size()
+        buffer = torch.pow(input, 2)
+
+        normp = torch.sum(buffer, 1).add_(1e-10)
+        norm = torch.sqrt(normp)
+
+        _output = torch.div(input, norm.view(-1, 1).expand_as(input))
+
+        output = _output.view(input_size)
+
+        return output

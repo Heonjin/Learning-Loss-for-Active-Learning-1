@@ -25,6 +25,8 @@ from torchvision.datasets import CIFAR100, CIFAR10
 # Utils
 import visdom
 from tqdm import tqdm
+import argparse
+from utils import L2dist
 
 # Custom
 import models.resnet as resnet
@@ -32,6 +34,22 @@ import models.lossnet as lossnet
 from config import *
 from data.sampler import SubsetSequentialSampler
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--lrl', action='store_true', default = False)  # AL pool
+parser.add_argument('--query', type=int, default = 1000)
+parser.add_argument('--epoch', type=int, default = 200)
+parser.add_argument('--cycles', type=int, default = 10)
+
+args = parser.parse_args()
+ADDENDUM = args.query
+EPOCH = args.epoch
+CYCLES = args.cycles
+if args.lrl:
+    args.embed2embed = True
+    args.is_norm = True
+    args.no_square = False
+    pdist = L2dist(2)
+    args.lamb2 = 1.
 
 ##
 # Data
@@ -74,6 +92,59 @@ def LossPredLoss(input, target, margin=1.0, reduction='mean'):
     
     return loss
 
+def LogRatioLoss(input, value):
+    m = input.size()[0]-1   # #paired
+    a = input[0]            # anchor
+    p = input[1:]           # paired
+
+    if not args.embed2embed:
+        eps = 1e-4# / value[0]
+        diff = torch.abs(value[0] - value[1:])
+        out = torch.pow(diff, 2)
+        gt_dist = torch.pow(out + eps, 1. / 2)
+
+        # auxiliary variables
+        idxs = torch.arange(1, m+1).cuda()
+        indc = idxs.repeat(m,1).t() < idxs.repeat(m,1)
+
+        epsilon = 1e-6
+        dist = pdist.forward(a,p)
+
+        log_dist = torch.log(dist + epsilon)
+        log_gt_dist = torch.log(gt_dist + epsilon)
+        diff_log_dist = log_dist.repeat(m,1).t()-log_dist.repeat(m, 1)
+        diff_log_gt_dist = log_gt_dist.repeat(m,1).t()-log_gt_dist.repeat(m, 1)
+    else:
+        gt_dist = value
+
+        eps = 1e-4# / value[0]
+        diff = torch.abs(value[0] - value[1:])
+        out = torch.pow(diff, 2)
+        gt_dist = torch.pow(out + eps, 1. / 2).sum(dim=1)
+
+        # auxiliary variables
+        idxs = torch.arange(1, m+1).cuda()
+        indc = idxs.repeat(m,1).t() < idxs.repeat(m,1)
+
+        epsilon = 1e-6
+        dist = pdist.forward(a,p)
+        log_dist = torch.log(dist + epsilon)
+        log_gt_dist = torch.log(gt_dist + epsilon)
+        diff_log_dist = log_dist.repeat(m,1).t()-log_dist.repeat(m, 1)
+        diff_log_gt_dist = log_gt_dist.repeat(m,1).t()-log_gt_dist.repeat(m, 1)
+
+    # uniform weight coefficients 
+    wgt = indc.clone().float()
+    wgt = wgt.div(wgt.sum())
+
+    if args.no_square:
+        log_ratio_loss = (diff_log_dist-diff_log_gt_dist).abs()
+    else:
+        log_ratio_loss = (diff_log_dist-diff_log_gt_dist).pow(2)
+
+    loss = log_ratio_loss
+    loss = loss.mul(wgt).sum()
+    return loss
 
 ##
 # Train Utils
@@ -93,7 +164,10 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         optimizers['backbone'].zero_grad()
         optimizers['module'].zero_grad()
 
-        scores, features = models['backbone'](inputs)
+        if args.lrl:
+            models['backbone'].is_norm = args.is_norm
+            models['module'].is_norm = args.is_norm
+        scores, features2, features = models['backbone'](inputs)
         target_loss = criterion(scores, labels)
 
         if epoch > epoch_loss:
@@ -102,13 +176,17 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             features[1] = features[1].detach()
             features[2] = features[2].detach()
             features[3] = features[3].detach()
-        pred_loss = models['module'](features)
+        pred_loss, embed = models['module'](features)
         pred_loss = pred_loss.view(pred_loss.size(0))
 
         m_backbone_loss = torch.sum(target_loss) / target_loss.size(0)
         m_module_loss   = LossPredLoss(pred_loss, target_loss, margin=MARGIN)
         loss            = m_backbone_loss + WEIGHT * m_module_loss
-
+        
+        if args.lrl:
+            loss2 = LogRatioLoss(embed, features2)
+            loss  = m_backbone_loss + WEIGHT * m_module_loss + args.lamb2 * loss2
+        
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
@@ -148,7 +226,7 @@ def test(models, dataloaders, mode='val'):
             inputs = inputs.cuda()
             labels = labels.cuda()
 
-            scores, _ = models['backbone'](inputs)
+            scores, _,_ = models['backbone'](inputs)
             _, preds = torch.max(scores.data, 1)
             total += labels.size(0)
             correct += (preds == labels).sum().item()
@@ -194,8 +272,8 @@ def get_uncertainty(models, unlabeled_loader):
             inputs = inputs.cuda()
             # labels = labels.cuda()
 
-            scores, features = models['backbone'](inputs)
-            pred_loss = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
+            scores, _,features = models['backbone'](inputs)
+            pred_loss,_ = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
             pred_loss = pred_loss.view(pred_loss.size(0))
 
             uncertainty = torch.cat((uncertainty, pred_loss), 0)
@@ -208,10 +286,11 @@ def get_uncertainty(models, unlabeled_loader):
 if __name__ == '__main__':
     vis = visdom.Visdom(server='http://localhost', port=9000)
     plot_data = {'X': [], 'Y': [], 'legend': ['Backbone Loss', 'Module Loss', 'Total Loss']}
-
+    collect_acc=[]
     for trial in range(TRIALS):
         # Initialize a labeled dataset by randomly sampling K=ADDENDUM=1,000 data points from the entire dataset.
         indices = list(range(NUM_TRAIN))
+        collect_acc.append([])
         random.shuffle(indices)
         labeled_set = indices[:ADDENDUM]
         unlabeled_set = indices[ADDENDUM:]
@@ -245,6 +324,7 @@ if __name__ == '__main__':
             # Training and test
             train(models, criterion, optimizers, schedulers, dataloaders, EPOCH, EPOCHL, vis, plot_data)
             acc = test(models, dataloaders, mode='test')
+            collect_acc[-1]+=acc,
             print('Trial {}/{} || Cycle {}/{} || Label set size {}: Test acc {}'.format(trial+1, TRIALS, cycle+1, CYCLES, len(labeled_set), acc))
 
             ##
@@ -281,3 +361,7 @@ if __name__ == '__main__':
                     'state_dict_module': models['module'].state_dict()
                 },
                 './cifar10/train/weights/active_resnet18_cifar10_trial{}.pth'.format(trial))
+    import time
+    timestr = "./results/" + time.strftime("%Y%m%d-%H%M%S")
+    with open(timestr + 'output.txt','w') as f:
+        f.write(str(collect_acc))

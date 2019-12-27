@@ -73,6 +73,8 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512*block.expansion, num_classes)
+        
+        self.is_norm = False
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -90,8 +92,23 @@ class ResNet(nn.Module):
         out4 = self.layer4(out3)
         out = F.avg_pool2d(out4, 4)
         out = out.view(out.size(0), -1)
+        if self.is_norm:
+            features = self.l2_norm(out)
         out = self.linear(out)
-        return out, [out1, out2, out3, out4]
+        return out, features, [out1, out2, out3, out4]
+    
+    def l2_norm(self,input):
+        input_size = input.size()
+        buffer = torch.pow(input, 2)
+
+        normp = torch.sum(buffer, 1).add_(1e-10)
+        norm = torch.sqrt(normp)
+
+        _output = torch.div(input, norm.view(-1, 1).expand_as(input))
+
+        output = _output.view(input_size)
+
+        return output
 
 
 def ResNet18(num_classes = 10):
