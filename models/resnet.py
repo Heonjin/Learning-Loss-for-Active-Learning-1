@@ -92,6 +92,7 @@ class ResNet(nn.Module):
         out4 = self.layer4(out3)
         out = F.avg_pool2d(out4, 4)
         out = out.view(out.size(0), -1)
+        features=out
         if self.is_norm:
             features = self.l2_norm(out)
         out = self.linear(out)
