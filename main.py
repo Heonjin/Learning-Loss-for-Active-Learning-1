@@ -12,6 +12,7 @@ import random
 import torch
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import torch.optim.lr_scheduler as lr_scheduler
@@ -39,17 +40,28 @@ parser.add_argument('--lrl', action='store_true', default = False)  # AL pool
 parser.add_argument('--query', type=int, default = 1000)
 parser.add_argument('--epoch', type=int, default = 200)
 parser.add_argument('--cycles', type=int, default = 10)
+parser.add_argument('--subset', type=int, default = 10000)
+parser.add_argument('--rule', type=str, default = "LL")
+parser.add_argument('--trials', type=int, default = TRIALS)
+parser.add_argument('--softmax', action='store_true', default = False)
+parser.add_argument('--onehot', action='store_true', default = False)
 
 args = parser.parse_args()
 ADDENDUM = args.query
 EPOCH = args.epoch
 CYCLES = args.cycles
+SUBSET = args.subset
+TRIALS = args.trials
+if args.softmax or args.onehot:
+    args.lrl=True
 if args.lrl:
     args.embed2embed = True
     args.is_norm = True
     args.no_square = False
     pdist = L2dist(2)
     args.lamb2 = 1.
+if args.rule != "LL":
+    SUBSET = 39000
 
 ##
 # Data
@@ -185,6 +197,14 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         
         if args.lrl:
             loss2 = LogRatioLoss(embed, features2)
+            if args.softmax:
+                loss2 = LogRatioLoss(scores,features2)
+            if args.onehot:
+                labels=labels.unsqueeze(1)
+                y_onehot = torch.FloatTensor(len(labels),10).cuda()
+                y_onehot.zero_()
+                y_onehot.scatter_(1,labels,1)
+                loss2 = LogRatioLoss(scores,y_onehot)
             loss  = m_backbone_loss + WEIGHT * m_module_loss + args.lamb2 * loss2
         
         loss.backward()
@@ -280,6 +300,19 @@ def get_uncertainty(models, unlabeled_loader):
     
     return uncertainty.cpu()
 
+def predict_prob(models, unlabeled_loader):
+    models['backbone'].eval()
+    models['module'].eval()
+    probs = torch.tensor([]).cuda()
+
+    with torch.no_grad():
+        for (inputs, labels) in unlabeled_loader:
+            inputs = inputs.cuda()
+            out = models['backbone'](inputs)[0]
+            prob = F.softmax(out, dim=1)
+            probs = torch.cat((probs,prob),0)
+    
+    return probs.cpu()
 
 ##
 # Main
@@ -339,15 +372,23 @@ if __name__ == '__main__':
                                           sampler=SubsetSequentialSampler(subset), # more convenient if we maintain the order of subset
                                           pin_memory=True)
 
-            # Measure uncertainty of each data points in the subset
-            uncertainty = get_uncertainty(models, unlabeled_loader)
+            if args.rule != "LL":
+                probs = predict_prob(models, unlabeled_loader)
+                log_probs = torch.log(probs)
+                U = (probs*log_probs).sum(1)
+                labeled_set += list(torch.tensor(subset)[U.sort()[1][:ADDENDUM]].numpy())
+                unlabeled_set = list(torch.tensor(subset)[U.sort()[1][ADDENDUM:]].numpy()) + unlabeled_set[SUBSET:]
+            else:
+                # Measure uncertainty of each data points in the subset
+                uncertainty = get_uncertainty(models, unlabeled_loader)
 
-            # Index in ascending order
-            arg = np.argsort(uncertainty)
-            
-            # Update the labeled dataset and the unlabeled dataset, respectively
-            labeled_set += list(torch.tensor(subset)[arg][-ADDENDUM:].numpy())
-            unlabeled_set = list(torch.tensor(subset)[arg][:-ADDENDUM].numpy()) + unlabeled_set[SUBSET:]
+                # Index in ascending order
+                arg = np.argsort(uncertainty)
+
+                # Update the labeled dataset and the unlabeled dataset, respectively
+
+                labeled_set += list(torch.tensor(subset)[arg][-ADDENDUM:].numpy())
+                unlabeled_set = list(torch.tensor(subset)[arg][:-ADDENDUM].numpy()) + unlabeled_set[SUBSET:]
 
             # Create a new dataloader for the updated labeled dataset
             dataloaders['train'] = DataLoader(cifar10_train, batch_size=BATCH, 
@@ -365,3 +406,4 @@ if __name__ == '__main__':
     timestr = "./results/" + time.strftime("%Y%m%d-%H%M%S")
     with open(timestr + 'output.txt','w') as f:
         f.write(str(collect_acc))
+        f.write('\n'+str(args))
