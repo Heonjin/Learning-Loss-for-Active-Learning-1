@@ -45,6 +45,7 @@ parser.add_argument('--rule', type=str, default = "LL")
 parser.add_argument('--trials', type=int, default = TRIALS)
 parser.add_argument('--softmax', action='store_true', default = False)
 parser.add_argument('--onehot', action='store_true', default = False)
+parser.add_argument('--lamb2', type=float, default = 1.)
 
 args = parser.parse_args()
 ADDENDUM = args.query
@@ -59,7 +60,6 @@ if args.lrl:
     args.is_norm = True
     args.no_square = False
     pdist = L2dist(2)
-    args.lamb2 = 1.
 if args.rule != "LL":
     SUBSET = 39000
 
