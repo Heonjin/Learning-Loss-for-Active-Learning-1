@@ -21,7 +21,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 # Torchvison
 import torchvision.transforms as T
 import torchvision.models as models
-from torchvision.datasets import CIFAR100, CIFAR10
+from torchvision.datasets import CIFAR100, CIFAR10,MNIST,FashionMNIST,SVHN
 
 # Utils
 import visdom
@@ -66,25 +66,47 @@ if args.rule != "LL":
 
 ##
 # Data
+if args.data == "CIFAR10":
+    Nor = T.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])
+elif args.data == "CIFAR100":
+    Nor = T.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+elif args.data == "SVHN":
+    Nor = T.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970))
+elif args.data == "MNIST":
+    Nor = T.Normalize((0.1307,), (0.3081,))
+elif args.data == "FashionMNIST":
+    Nor = T.Normalize((0.1307,), (0.3081,))
 train_transform = T.Compose([
     T.RandomHorizontalFlip(),
     T.RandomCrop(size=32, padding=4),
     T.ToTensor(),
-    T.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010]) # T.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)) # CIFAR-100
+    Nor
 ])
 
 test_transform = T.Compose([
     T.ToTensor(),
-    T.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010]) # T.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)) # CIFAR-100
+    Nor
 ])
 if args.data == "CIFAR10":
-    cifar10_train = CIFAR10('../cifar10', train=True, download=True, transform=train_transform)
-    cifar10_unlabeled   = CIFAR10('../cifar10', train=True, download=True, transform=test_transform)
-    cifar10_test  = CIFAR10('../cifar10', train=False, download=True, transform=test_transform)
-else:
-    cifar10_train = CIFAR100('../cifar100', train=True, download=True, transform=train_transform)
-    cifar10_unlabeled   = CIFAR100('../cifar100', train=True, download=True, transform=test_transform)
-    cifar10_test  = CIFAR100('../cifar100', train=False, download=True, transform=test_transform)
+    cifar10_train = CIFAR10('./cifar10', train=True, download=True, transform=train_transform)
+    cifar10_unlabeled   = CIFAR10('./cifar10', train=True, download=True, transform=test_transform)
+    cifar10_test  = CIFAR10('./cifar10', train=False, download=True, transform=test_transform)
+elif args.data =="CIFAR100":
+    cifar10_train = CIFAR100('./cifar100', train=True, download=True, transform=train_transform)
+    cifar10_unlabeled   = CIFAR100('./cifar100', train=True, download=True, transform=test_transform)
+    cifar10_test  = CIFAR100('./cifar100', train=False, download=True, transform=test_transform)
+elif args.data == "SVHN":
+    cifar10_train = SVHN('./SVHN', split='train', download=True, transform=train_transform)
+    cifar10_unlabeled   = SVHN('./SVHN', split='train', download=True, transform=test_transform)
+    cifar10_test  = SVHN('./SVHN', split='test', download=True, transform=test_transform)
+elif args.data =="MNIST":
+    cifar10_train = MNIST('./MNIST', train=True, download=True, transform=train_transform)
+    cifar10_unlabeled   = MNIST('./MNIST', train=True, download=True, transform=test_transform)
+    cifar10_test  = MNIST('./MNIST', train=False, download=True, transform=test_transform)
+elif args.data == "FashionMNIST":
+    cifar10_train = FashionMNIST('./FashionMNIST', train=True, download=True, transform=train_transform)
+    cifar10_unlabeled   = FashionMNIST('./FashionMNIST', train=True, download=True, transform=test_transform)
+    cifar10_test  = FashionMNIST('./FashionMNIST', train=False, download=True, transform=test_transform)
 
 
 
@@ -341,10 +363,12 @@ if __name__ == '__main__':
         dataloaders  = {'train': train_loader, 'test': test_loader}
         
         # Model
-        if args.data == "CIFAR10":
+        if args.data == "CIFAR100":
+            resnet18    = resnet.ResNet18(num_classes=100).cuda()
+        elif args.data in ["CIFAR10","SVHN"]:
             resnet18    = resnet.ResNet18(num_classes=10).cuda()
         else:
-            resnet18    = resnet.ResNet18(num_classes=100).cuda()
+            resnet18    = resnet.ResNet18(num_classes=10,in_channel=1).cuda()
         loss_module = lossnet.LossNet().cuda()
         models      = {'backbone': resnet18, 'module': loss_module}
         torch.backends.cudnn.benchmark = True
