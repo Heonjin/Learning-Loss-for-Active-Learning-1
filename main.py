@@ -46,6 +46,7 @@ parser.add_argument('--trials', type=int, default = TRIALS)
 parser.add_argument('--softmax', action='store_true', default = False)
 parser.add_argument('--onehot', action='store_true', default = False)
 parser.add_argument('--lamb2', type=float, default = 1.)
+parser.add_argument('--data', type=str, default = "CIFAR10")
 
 args = parser.parse_args()
 ADDENDUM = args.query
@@ -76,10 +77,15 @@ test_transform = T.Compose([
     T.ToTensor(),
     T.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010]) # T.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)) # CIFAR-100
 ])
+if args.data == "CIFAR10":
+    cifar10_train = CIFAR10('../cifar10', train=True, download=True, transform=train_transform)
+    cifar10_unlabeled   = CIFAR10('../cifar10', train=True, download=True, transform=test_transform)
+    cifar10_test  = CIFAR10('../cifar10', train=False, download=True, transform=test_transform)
+else:
+    cifar10_train = CIFAR100('../cifar100', train=True, download=True, transform=train_transform)
+    cifar10_unlabeled   = CIFAR100('../cifar100', train=True, download=True, transform=test_transform)
+    cifar10_test  = CIFAR100('../cifar100', train=False, download=True, transform=test_transform)
 
-cifar10_train = CIFAR10('../cifar10', train=True, download=True, transform=train_transform)
-cifar10_unlabeled   = CIFAR10('../cifar10', train=True, download=True, transform=test_transform)
-cifar10_test  = CIFAR10('../cifar10', train=False, download=True, transform=test_transform)
 
 
 ##
@@ -335,7 +341,10 @@ if __name__ == '__main__':
         dataloaders  = {'train': train_loader, 'test': test_loader}
         
         # Model
-        resnet18    = resnet.ResNet18(num_classes=10).cuda()
+        if args.data == "CIFAR10":
+            resnet18    = resnet.ResNet18(num_classes=10).cuda()
+        else:
+            resnet18    = resnet.ResNet18(num_classes=100).cuda()
         loss_module = lossnet.LossNet().cuda()
         models      = {'backbone': resnet18, 'module': loss_module}
         torch.backends.cudnn.benchmark = True
