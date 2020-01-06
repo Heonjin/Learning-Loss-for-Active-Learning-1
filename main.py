@@ -55,6 +55,8 @@ EPOCH = args.epoch
 CYCLES = args.cycles
 SUBSET = args.subset
 TRIALS = args.trials
+if args.rule == "lrlonly":
+    args.lrl = True
 if args.rule == "lpl":
     args.lrl = True
 if args.softmax or args.onehot:
