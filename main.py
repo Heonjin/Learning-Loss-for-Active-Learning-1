@@ -330,7 +330,7 @@ def get_uncertainty(models, unlabeled_loader):
             ### LL plus LRL = lpl
             if args.rule == "lpl":
                 loss2 = LogRatioLoss(embed, features2)
-            pred_loss = pred_loss + args.lamb2 * loss2
+                pred_loss = pred_loss + args.lamb2 * loss2
 
             uncertainty = torch.cat((uncertainty, pred_loss), 0)
     
