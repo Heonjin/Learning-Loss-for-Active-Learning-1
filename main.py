@@ -47,6 +47,7 @@ parser.add_argument('--softmax', action='store_true', default = False)
 parser.add_argument('--onehot', action='store_true', default = False)
 parser.add_argument('--lamb2', type=float, default = 1.)
 parser.add_argument('--data', type=str, default = "CIFAR10")
+parser.add_argument('--lpl', action='store_true', default = False)
 
 args = parser.parse_args()
 ADDENDUM = args.query
@@ -54,14 +55,16 @@ EPOCH = args.epoch
 CYCLES = args.cycles
 SUBSET = args.subset
 TRIALS = args.trials
+if args.rule == "lpl":
+    args.lrl = True
 if args.softmax or args.onehot:
-    args.lrl=True
+    args.lrl = True
 if args.lrl:
     args.embed2embed = True
     args.is_norm = True
     args.no_square = False
     pdist = L2dist(2)
-if args.rule != "LL":
+if args.rule == "Entropy":
     SUBSET = 39000
 
 ##
@@ -320,9 +323,14 @@ def get_uncertainty(models, unlabeled_loader):
             inputs = inputs.cuda()
             # labels = labels.cuda()
 
-            scores, _,features = models['backbone'](inputs)
-            pred_loss,_ = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
+            scores, features2,features = models['backbone'](inputs)
+            pred_loss,embed = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
             pred_loss = pred_loss.view(pred_loss.size(0))
+            
+            ### LL plus LRL = lpl
+            if args.rule == "lpl":
+                loss2 = LogRatioLoss(embed, features2)
+            pred_loss = pred_loss + args.lamb2 * loss2
 
             uncertainty = torch.cat((uncertainty, pred_loss), 0)
     
@@ -405,7 +413,7 @@ if __name__ == '__main__':
                                           sampler=SubsetSequentialSampler(subset), # more convenient if we maintain the order of subset
                                           pin_memory=True)
 
-            if args.rule != "LL":
+            if args.rule == "Entropy":
                 probs = predict_prob(models, unlabeled_loader)
                 log_probs = torch.log(probs)
                 U = (probs*log_probs).sum(1)
