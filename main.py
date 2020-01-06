@@ -313,18 +313,28 @@ def train(models, criterion, optimizers, schedulers, dataloaders, num_epochs, ep
     print('>> Finished.')
 
 #
-def get_uncertainty(models, unlabeled_loader):
+def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
     models['backbone'].eval()
     models['module'].eval()
     uncertainty = torch.tensor([]).cuda()
-
+    
+    if labeled_loader != None:
+        with torch.no_grad():
+            for (inputs,labeles) in labeled_loader:
+                inputs = inputs.cuda()
+                labeles = labeles.cuda()
+                
+                scores, labeled_feat,features = models['backbone'](inputs)
+                pred_loss, labeled_embed = models['module'](features)
+                break
+                
     with torch.no_grad():
         for (inputs, labels) in unlabeled_loader:
             inputs = inputs.cuda()
             # labels = labels.cuda()
 
             scores, features2,features = models['backbone'](inputs)
-            pred_loss,embed = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
+            pred_loss, embed = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
             pred_loss = pred_loss.view(pred_loss.size(0))
             
             ### LL plus LRL = lpl
@@ -332,7 +342,14 @@ def get_uncertainty(models, unlabeled_loader):
                 loss2 = LogRatioLoss(embed, features2)
                 pred_loss = pred_loss + args.lamb2 * loss2
 
-            uncertainty = torch.cat((uncertainty, pred_loss), 0)
+            if args.rule == "lrlonly":
+                for i in range(len(features2)):
+                    labeled_feat[0] = features2[i]
+                    labeled_embed[0] = embed[i]
+                    loss2 = LogRatioLoss(labeled_embed, labeled_feat)
+                    uncertainty = torch.cat((uncertainty, torch.tensor([loss2]).cuda()), 0)
+            else:
+                uncertainty = torch.cat((uncertainty, pred_loss), 0)
     
     return uncertainty.cpu()
 
@@ -421,7 +438,10 @@ if __name__ == '__main__':
                 unlabeled_set = list(torch.tensor(subset)[U.sort()[1][ADDENDUM:]].numpy()) + unlabeled_set[SUBSET:]
             else:
                 # Measure uncertainty of each data points in the subset
-                uncertainty = get_uncertainty(models, unlabeled_loader)
+                if args.rule == "lrlonly":
+                    uncertainty = get_uncertainty(models, unlabeled_loader, dataloaders['train'])
+                else:
+                    uncertainty = get_uncertainty(models, unlabeled_loader)
 
                 # Index in ascending order
                 arg = np.argsort(uncertainty)
