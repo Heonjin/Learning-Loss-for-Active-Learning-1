@@ -48,6 +48,7 @@ parser.add_argument('--onehot', action='store_true', default = False)
 parser.add_argument('--lamb2', type=float, default = 1.)
 parser.add_argument('--data', type=str, default = "CIFAR10")
 parser.add_argument('--lpl', action='store_true', default = False)
+parser.add_argument('--lamb1', type=float, default = 1.)
 
 args = parser.parse_args()
 ADDENDUM = args.query
@@ -55,6 +56,7 @@ EPOCH = args.epoch
 CYCLES = args.cycles
 SUBSET = args.subset
 TRIALS = args.trials
+WEIGHT = args.lamb1
 if args.rule == "lrlonly":
     args.lrl = True
 if args.rule == "lpl":
@@ -230,14 +232,14 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         
         if args.lrl:
             loss2 = LogRatioLoss(embed, features2)
-            if args.softmax:
-                loss2 = LogRatioLoss(scores,features2)
+            if args.softmax or args.rule == "lplwsoftmax":
+                loss2 = LogRatioLoss(scores,embed)
             if args.onehot:
                 labels=labels.unsqueeze(1)
                 y_onehot = torch.FloatTensor(len(labels),10).cuda()
                 y_onehot.zero_()
                 y_onehot.scatter_(1,labels,1)
-                loss2 = LogRatioLoss(scores,y_onehot)
+                loss2 = LogRatioLoss(y_onehot, embed)
             loss  = m_backbone_loss + WEIGHT * m_module_loss + args.lamb2 * loss2
         
         loss.backward()
@@ -342,8 +344,11 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
             ### LL plus LRL = lpl
             if args.rule == "lpl":
                 loss2 = LogRatioLoss(embed, features2)
-                pred_loss = pred_loss + args.lamb2 * loss2
-
+                pred_loss = WEIGHT * pred_loss + args.lamb2 * loss2
+            elif args.rule == "lplwsoftmax":
+                loss2 = LogRatioLoss(scores,embed)
+                pred_loss = WEIGHT * pred_loss + args.lamb2 * loss2
+            ### pick by lrl only
             if args.rule == "lrlonly":
                 for i in range(len(features2)):
                     labeled_feat[0] = features2[i]
