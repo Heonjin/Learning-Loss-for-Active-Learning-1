@@ -53,12 +53,6 @@ parser.add_argument('--lamb1', type=float, default = 1.)
 parser.add_argument('--seed', action='store_true', default = False)
 
 args = parser.parse_args()
-ADDENDUM = args.query
-EPOCH = args.epoch
-CYCLES = args.cycles
-SUBSET = args.subset
-TRIALS = args.trials
-WEIGHT = args.lamb1
 if args.rule == "lrlonly":
     args.lrl = True
 if args.rule in ["lpl", "lplwsoftmax"]:
@@ -72,6 +66,14 @@ if args.lrl:
     pdist = L2dist(2)
 if args.rule == "Entropy":
     SUBSET = 39000
+if args.seed == True:
+    args.trials = 1
+ADDENDUM = args.query
+EPOCH = args.epoch
+CYCLES = args.cycles
+SUBSET = args.subset
+TRIALS = args.trials
+WEIGHT = args.lamb1
 
 ##
 # Data
