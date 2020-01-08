@@ -59,7 +59,7 @@ TRIALS = args.trials
 WEIGHT = args.lamb1
 if args.rule == "lrlonly":
     args.lrl = True
-if args.rule == "lpl":
+if args.rule in ["lpl", "lplwsoftmax"]:
     args.lrl = True
 if args.softmax or args.onehot:
     args.lrl = True
