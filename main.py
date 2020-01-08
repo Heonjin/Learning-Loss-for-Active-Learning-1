@@ -51,9 +51,10 @@ parser.add_argument('--data', type=str, default = "CIFAR10")
 parser.add_argument('--lpl', action='store_true', default = False)
 parser.add_argument('--lamb1', type=float, default = 1.)
 parser.add_argument('--seed', action='store_true', default = False)
+parser.add_argument('--lrlbatch', type=int, default = 128)
 
 args = parser.parse_args()
-if args.rule == "lrlonly":
+if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
     args.lrl = True
 if args.rule in ["lpl", "lplwsoftmax"]:
     args.lrl = True
@@ -332,7 +333,7 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
                 inputs = inputs.cuda()
                 labeles = labeles.cuda()
                 
-                scores, labeled_feat,features = models['backbone'](inputs)
+                labeled_scores, labeled_feat,features = models['backbone'](inputs)
                 pred_loss, labeled_embed = models['module'](features)
                 break
                 
@@ -353,11 +354,15 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
                 loss2 = LogRatioLoss(scores,embed)
                 pred_loss = WEIGHT * pred_loss + args.lamb2 * loss2
             ### pick by lrl only
-            if args.rule == "lrlonly":
+            if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
                 for i in range(len(features2)):
-                    labeled_feat[0] = features2[i]
                     labeled_embed[0] = embed[i]
-                    loss2 = LogRatioLoss(labeled_embed, labeled_feat)
+                    if args.rule == "lrlonlywsoftmax":
+                        labeled_scores[0] = scores[i]
+                        loss2 = LogRatioLoss(labeled_embed, labeled_scores)
+                    else:
+                        labeled_feat[0] = features2[i]
+                        loss2 = LogRatioLoss(labeled_embed, labeled_feat)
                     uncertainty = torch.cat((uncertainty, torch.tensor([loss2]).cuda()), 0)
             else:
                 uncertainty = torch.cat((uncertainty, pred_loss), 0)
@@ -386,12 +391,12 @@ if __name__ == '__main__':
     collect_acc=[]
     for trial in range(TRIALS):
         # Initialize a labeled dataset by randomly sampling K=ADDENDUM=1,000 data points from the entire dataset.
+        random.seed(0)
         if args.seed:
-            numpy.random.seed(0)
             torch.manual_seed(0)
-            random.seed(0)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
+
 
         indices = list(range(NUM_TRAIN))
         collect_acc.append([])
@@ -415,7 +420,7 @@ if __name__ == '__main__':
         loss_module = lossnet.LossNet().cuda()
         models      = {'backbone': resnet18, 'module': loss_module}
         torch.backends.cudnn.benchmark = True
-
+        
         # Active learning cycles
         for cycle in range(CYCLES):
             # Loss, criterion and scheduler (re)initialization
@@ -442,11 +447,16 @@ if __name__ == '__main__':
             # Randomly sample 10000 unlabeled data points
             random.shuffle(unlabeled_set)
             subset = unlabeled_set[:SUBSET]
+            labeledsubset = unlabeled_set[SUBSET:]
 
             # Create unlabeled dataloader for the unlabeled subset
             unlabeled_loader = DataLoader(cifar10_unlabeled, batch_size=BATCH, 
                                           sampler=SubsetSequentialSampler(subset), # more convenient if we maintain the order of subset
                                           pin_memory=True)
+            labeled_loader = DataLoader(cifar10_unlabeled, batch_size=args.lrlbatch, 
+                                          sampler=SubsetSequentialSampler(labeledsubset),
+                                          pin_memory=True)
+
 
             if args.rule == "Entropy":
                 probs = predict_prob(models, unlabeled_loader)
@@ -456,8 +466,8 @@ if __name__ == '__main__':
                 unlabeled_set = list(torch.tensor(subset)[U.sort()[1][ADDENDUM:]].numpy()) + unlabeled_set[SUBSET:]
             else:
                 # Measure uncertainty of each data points in the subset
-                if args.rule == "lrlonly":
-                    uncertainty = get_uncertainty(models, unlabeled_loader, dataloaders['train'])
+                if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
+                    uncertainty = get_uncertainty(models, unlabeled_loader, labeled_loader)
                 else:
                     uncertainty = get_uncertainty(models, unlabeled_loader)
 
