@@ -24,6 +24,7 @@ import torchvision.models as models
 from torchvision.datasets import CIFAR100, CIFAR10,MNIST,FashionMNIST,SVHN
 
 # Utils
+import numpy
 import visdom
 from tqdm import tqdm
 import argparse
@@ -49,6 +50,7 @@ parser.add_argument('--lamb2', type=float, default = 1.)
 parser.add_argument('--data', type=str, default = "CIFAR10")
 parser.add_argument('--lpl', action='store_true', default = False)
 parser.add_argument('--lamb1', type=float, default = 1.)
+parser.add_argument('--seed', action='store_true', default = False)
 
 args = parser.parse_args()
 ADDENDUM = args.query
@@ -382,6 +384,13 @@ if __name__ == '__main__':
     collect_acc=[]
     for trial in range(TRIALS):
         # Initialize a labeled dataset by randomly sampling K=ADDENDUM=1,000 data points from the entire dataset.
+        if args.seed:
+            numpy.random.seed(0)
+            torch.manual_seed(0)
+            random.seed(0)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
         indices = list(range(NUM_TRAIN))
         collect_acc.append([])
         random.shuffle(indices)
