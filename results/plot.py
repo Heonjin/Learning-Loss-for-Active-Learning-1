@@ -30,6 +30,14 @@ for file in files:
     name+=info['data']
     if info['rule'] == 'lrlonly':
         name+='_lrlonly'
+    elif info['rule'] == 'lrlonlywsoftmax':
+        name+='_lrlonlywsoftmax'
+    elif info['rule'] == 'lplwsoftmax':
+        name+='_lplwsoftmax'
+    try:
+        if info['lamb1'] == 0:
+            name+='_lamb10'
+
     if info['rule'] == 'lpl':
         name+='_lpl'
     if info['lrl']==True:
