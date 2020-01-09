@@ -56,6 +56,8 @@ parser.add_argument('--lrlbatch', type=int, default = 128)
 args = parser.parse_args()
 if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
     args.lrl = True
+if args.rule in ["lrlonlywsoftmax", "lplwsoftmax"]:
+    args.softmax = True
 if args.rule in ["lpl", "lplwsoftmax"]:
     args.lrl = True
 if args.softmax or args.onehot:
@@ -75,6 +77,7 @@ CYCLES = args.cycles
 SUBSET = args.subset
 TRIALS = args.trials
 WEIGHT = args.lamb1
+softmax = nn.Softmax(dim=1)
 
 ##
 # Data
@@ -167,6 +170,10 @@ def LogRatioLoss(input, value):
         diff_log_dist = log_dist.repeat(m,1).t()-log_dist.repeat(m, 1)
         diff_log_gt_dist = log_gt_dist.repeat(m,1).t()-log_gt_dist.repeat(m, 1)
     else:
+        if value.size()[1]<=10:
+            value = softmax(value)
+        if input.size()[1]<=10:
+            input = softmax(input)
         gt_dist = value
 
         eps = 1e-4# / value[0]
@@ -236,15 +243,16 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         loss            = m_backbone_loss + WEIGHT * m_module_loss
         
         if args.lrl:
-            loss2 = LogRatioLoss(embed, features2)
             if args.softmax or args.rule == "lplwsoftmax":
                 loss2 = LogRatioLoss(scores,embed)
-            if args.onehot:
+            elif args.onehot:
                 labels=labels.unsqueeze(1)
                 y_onehot = torch.FloatTensor(len(labels),10).cuda()
                 y_onehot.zero_()
                 y_onehot.scatter_(1,labels,1)
                 loss2 = LogRatioLoss(y_onehot, embed)
+            else:
+                loss2 = LogRatioLoss(embed, features2)
             loss  = m_backbone_loss + WEIGHT * m_module_loss + args.lamb2 * loss2
         
         loss.backward()

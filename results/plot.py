@@ -1,6 +1,6 @@
 import os
 def makecolor():
-    color=['b','g','r','c','m','y','k','b--','g--','r--','c--','m--','y--','k--']
+    color=['b','g','r','c','m','y','k','b--','g--','r--','c--','m--','y--','k--', 'bo','go','ro','co','mo','yo','ko']
     for i in color:
         yield i
 files = [f for f in os.listdir('.')]
@@ -39,7 +39,7 @@ for file in files:
             name+='_lamb10'
     except:
         pass
-    if info['rule'] == 'lpl':
+    if 'lpl' in info.keys():
         name+='_lpl'
     if info['lrl']==True:
         name+='_lrl'
@@ -49,6 +49,8 @@ for file in files:
         name+='_p'+str(info['subset'])
     if info['lamb2'] != 1.:
         name+='_lamb2'+str(int(info['lamb2']))
+    if info['lrlbatch'] != 128:
+        name+='_lrlbatch'+str(info['lrlbatch'])
     print(name+' = np.array('+num+')')
     print('plt.plot(axis1000[:10],np.mean('+name+',axis=0)[:10],'+'"'+next(make)+'"'+', label = "'+name+'")')#,sep='')
 
