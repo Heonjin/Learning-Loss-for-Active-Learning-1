@@ -37,7 +37,8 @@ for file in files:
     try:
         if info['lamb1'] == 0:
             name+='_lamb10'
-
+    except:
+        pass
     if info['rule'] == 'lpl':
         name+='_lpl'
     if info['lrl']==True:
