@@ -54,7 +54,7 @@ parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
 parser.add_argument('--printdata', action='store_true', default = False)
-parser.add_argument('--nonlog', action='store_true', default = False)
+parser.add_argument('--log', action='store_true', default = False)
 
 args = parser.parse_args()
 if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
@@ -497,6 +497,7 @@ if __name__ == '__main__':
 
                 # Update the labeled dataset and the unlabeled dataset, respectively
                 init = labeled_set[:]
+                
                 added_set = list(torch.tensor(subset)[arg][-ADDENDUM:].numpy())
                 labeled_set += list(torch.tensor(subset)[arg][-ADDENDUM:].numpy())
                 unlabeled_set = list(torch.tensor(subset)[arg][:-ADDENDUM].numpy()) + unlabeled_set[SUBSET:]
