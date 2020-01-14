@@ -52,6 +52,9 @@ parser.add_argument('--lpl', action='store_true', default = False)
 parser.add_argument('--lamb1', type=float, default = 1.)
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
+parser.add_argument('--savedata', action='store_true', default = False)
+parser.add_argument('--printdata', action='store_true', default = False)
+parser.add_argument('--log', action='store_true', default = False)
 
 args = parser.parse_args()
 if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
@@ -123,6 +126,10 @@ elif args.data == "FashionMNIST":
     cifar10_unlabeled   = FashionMNIST('./FashionMNIST', train=True, download=True, transform=test_transform)
     cifar10_test  = FashionMNIST('./FashionMNIST', train=False, download=True, transform=test_transform)
 
+transform = T.Compose(
+    [T.ToTensor(),
+     ])
+visual = CIFAR10('./cifar10', train=True, download=True, transform=transform)
 
 
 ##
@@ -187,8 +194,12 @@ def LogRatioLoss(input, value):
 
         epsilon = 1e-6
         dist = pdist.forward(a,p)
-        log_dist = torch.log(dist + epsilon)
-        log_gt_dist = torch.log(gt_dist + epsilon)
+        if args.log:
+            log_dist = torch.log(dist + epsilon)
+            log_gt_dist = torch.log(gt_dist + epsilon)
+        else:
+            log_dist = dist + epsilon
+            log_gt_dist = gt_dist + epsilon
         diff_log_dist = log_dist.repeat(m,1).t()-log_dist.repeat(m, 1)
         diff_log_gt_dist = log_gt_dist.repeat(m,1).t()-log_gt_dist.repeat(m, 1)
 
@@ -470,6 +481,7 @@ if __name__ == '__main__':
                 probs = predict_prob(models, unlabeled_loader)
                 log_probs = torch.log(probs)
                 U = (probs*log_probs).sum(1)
+                init = labeled_set[:]
                 labeled_set += list(torch.tensor(subset)[U.sort()[1][:ADDENDUM]].numpy())
                 unlabeled_set = list(torch.tensor(subset)[U.sort()[1][ADDENDUM:]].numpy()) + unlabeled_set[SUBSET:]
             else:
@@ -483,14 +495,48 @@ if __name__ == '__main__':
                 arg = np.argsort(uncertainty)
 
                 # Update the labeled dataset and the unlabeled dataset, respectively
-
+                init = labeled_set[:]
                 labeled_set += list(torch.tensor(subset)[arg][-ADDENDUM:].numpy())
                 unlabeled_set = list(torch.tensor(subset)[arg][:-ADDENDUM].numpy()) + unlabeled_set[SUBSET:]
-
+            
+            added_set = list(torch.tensor(subset)[U.sort()[1][:ADDENDUM]].numpy())
             # Create a new dataloader for the updated labeled dataset
             dataloaders['train'] = DataLoader(cifar10_train, batch_size=BATCH, 
                                               sampler=SubsetRandomSampler(labeled_set), 
                                               pin_memory=True)
+            
+            classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+            if args.savedata:
+                import sys
+                import matplotlib.pyplot as plt
+                import torchvision
+                plt.ion()
+                a=args.query
+                f, axarr = plt.subplots(a//10+1,10)
+                k=0
+                for i in added_set:
+                    inputs, label = visual[i]
+                    axarr[k].imshow(torchvision.utils.make_grid(inputs).numpy().transpose((1,2,0)))
+                    axarr[k].set_title(classes[label])
+                    k+=1
+                plt.ioff()
+                plt.savefig('temp.jpg')
+                sys.exit()
+            elif args.printdata:
+                import sys
+                print('init')
+                num={ i:0 for i in classes}
+                for i in init:
+                    num[classes[visual[i][1]]]+=1
+                for i in range(10):
+                    print(classes[i] + ' :\t' + str(num[classes[i]]))
+                print('added')
+                num={ i:0 for i in classes}
+                for i in added_set:
+                    num[classes[visual[i][1]]]+=1
+                for i in range(10):
+                    print(classes[i] + ' :\t' + str(num[classes[i]]))
+                sys.exit()
         
         # Save a checkpoint
         torch.save({
