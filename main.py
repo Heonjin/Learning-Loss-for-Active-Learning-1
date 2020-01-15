@@ -17,6 +17,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.data.sampler import SubsetRandomSampler
+from torch.autograd import Variable
 
 # Torchvison
 import torchvision.transforms as T
@@ -54,7 +55,8 @@ parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
 parser.add_argument('--printdata', action='store_true', default = False)
-parser.add_argument('--log', action='store_true', default = False)
+parser.add_argument('--nolog', action='store_true', default = False)
+parser.add_argument('--triplet', action='store_true', default = False)
 
 args = parser.parse_args()
 if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
@@ -154,6 +156,41 @@ def LossPredLoss(input, target, margin=1.0, reduction='mean'):
     
     return loss
 
+def TripletLoss(input, label, margin=1.0):
+    m = input.size()[0]-1
+    a = input[0],label[0]
+    p = input[1:]
+
+    losses = Variable(torch.Tensor([0]), requires_grad=True)
+    diff = torch.abs(a[0]-p)
+    out = torch.pow(diff,2)
+    out = torch.pow(out,1./2).sum(1)
+    
+    n = 0
+    for i in range(1,m):
+        for j in range(i+1,m):
+            if label[i] == a[1] and label[j] !=a[1]:
+                distance_positive = out[i]
+                distance_negative = out[j]
+                if n==0:
+                    losses = F.relu(distance_positive - distance_negative + margin)
+                else:
+                    losses += F.relu(distance_positive - distance_negative + margin)
+                n+=1
+            elif label[i] != a[1] and label[j] ==a[1]:
+                distance_positive = out[j]
+                distance_negative = out[i]
+                if n==0:
+                    losses = F.relu(distance_positive - distance_negative + margin)
+                else:
+                    losses += F.relu(distance_positive - distance_negative + margin)
+                n+=1
+    print(losses/n)
+    if n ==0:
+        return 0
+    else:
+        return losses/n
+
 def LogRatioLoss(input, value):
     m = input.size()[0]-1   # #paired
     a = input[0]            # anchor
@@ -194,14 +231,14 @@ def LogRatioLoss(input, value):
 
         epsilon = 1e-6
         dist = pdist.forward(a,p)
-        if args.log:
+        if args.nolog:
+            log_dist = dist
+            log_gt_dist = gt_dist
+        else:
             log_dist = torch.log(dist + epsilon)
             log_gt_dist = torch.log(gt_dist + epsilon)
-        else:
-            log_dist = dist + epsilon
-            log_gt_dist = gt_dist + epsilon
-        diff_log_dist = log_dist.repeat(m,1).t()-log_dist.repeat(m, 1)
-        diff_log_gt_dist = log_gt_dist.repeat(m,1).t()-log_gt_dist.repeat(m, 1)
+        diff_log_dist = torch.abs(log_dist.repeat(m,1).t()-log_dist.repeat(m, 1))
+        diff_log_gt_dist = torch.abs(log_gt_dist.repeat(m,1).t()-log_gt_dist.repeat(m, 1))
 
     # uniform weight coefficients 
     wgt = indc.clone().float()
@@ -265,7 +302,8 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             else:
                 loss2 = LogRatioLoss(embed, features2)
             loss  = m_backbone_loss + WEIGHT * m_module_loss + args.lamb2 * loss2
-        
+        if args.triplet:
+            loss += TripletLoss(features2,labels)
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
