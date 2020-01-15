@@ -57,6 +57,8 @@ parser.add_argument('--savedata', action='store_true', default = False)
 parser.add_argument('--printdata', action='store_true', default = False)
 parser.add_argument('--nolog', action='store_true', default = False)
 parser.add_argument('--triplet', action='store_true', default = False)
+parser.add_argument('--tripletlog', action='store_true', default = False)
+parser.add_argument('--tripletratio', action='store_true', default = False)
 
 args = parser.parse_args()
 if args.triplet:
@@ -168,21 +170,27 @@ def TripletLoss(input, label, margin=1.0):
     diff = torch.abs(a[0]-p)
     out = torch.pow(diff,2).sum(1)
     out = torch.pow(out,1./2)
-#     if args.nolog:
-#         out = torch.log(out)
-
+    if args.tripletlog:
+        out = torch.log(out)
+    
     n = 0
     for i in range(1,m):
         for j in range(i+1,m):
             if label[i] == a[1] and label[j] !=a[1]:
                 distance_positive = out[i]
                 distance_negative = out[j]
-                losses += F.relu(distance_positive - distance_negative + margin)
+                if args.tripletratio:
+                    losses += F.relu(1 - distance_positive / (distance_negative + 0.01))
+                else:
+                    losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
             elif label[i] != a[1] and label[j] ==a[1]:
                 distance_positive = out[j]
                 distance_negative = out[i]
-                losses += F.relu(distance_positive - distance_negative + margin)
+                if args.tripletratio:
+                    losses += F.relu(1 - distance_positive / (distance_negative + 0.01))
+                else:
+                    losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
 
     if losses > 0:
