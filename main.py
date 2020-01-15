@@ -59,6 +59,8 @@ parser.add_argument('--nolog', action='store_true', default = False)
 parser.add_argument('--triplet', action='store_true', default = False)
 
 args = parser.parse_args()
+if args.triplet:
+    args.nolog = True
 if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
     args.lrl = True
 if args.rule in ["lrlonlywsoftmax", "lplwsoftmax"]:
@@ -161,35 +163,32 @@ def TripletLoss(input, label, margin=1.0):
     a = input[0],label[0]
     p = input[1:]
 
-    losses = Variable(torch.Tensor([0]), requires_grad=True)
+#     losses = Variable(torch.Tensor([0]), requires_grad=True)
+    losses = 0.
     diff = torch.abs(a[0]-p)
-    out = torch.pow(diff,2)
-    out = torch.pow(out,1./2).sum(1)
-    
+    out = torch.pow(diff,2).sum(1)
+    out = torch.pow(out,1./2)
+#     if args.nolog:
+#         out = torch.log(out)
+
     n = 0
     for i in range(1,m):
         for j in range(i+1,m):
             if label[i] == a[1] and label[j] !=a[1]:
                 distance_positive = out[i]
                 distance_negative = out[j]
-                if n==0:
-                    losses = F.relu(distance_positive - distance_negative + margin)
-                else:
-                    losses += F.relu(distance_positive - distance_negative + margin)
+                losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
             elif label[i] != a[1] and label[j] ==a[1]:
                 distance_positive = out[j]
                 distance_negative = out[i]
-                if n==0:
-                    losses = F.relu(distance_positive - distance_negative + margin)
-                else:
-                    losses += F.relu(distance_positive - distance_negative + margin)
+                losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
-    print(losses/n)
-    if n ==0:
-        return 0
-    else:
+
+    if losses > 0:
         return losses/n
+    else:
+        return 0
 
 def LogRatioLoss(input, value):
     m = input.size()[0]-1   # #paired
