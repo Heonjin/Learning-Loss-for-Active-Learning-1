@@ -180,7 +180,7 @@ def TripletLoss(input, label, margin=1.0):
                 distance_positive = out[i]
                 distance_negative = out[j]
                 if args.tripletratio:
-                    losses += F.relu(1 - distance_positive / (distance_negative + 0.01))
+                    losses += F.relu(1 - distance_negative / (distance_positive + 0.01))
                 else:
                     losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
@@ -188,7 +188,7 @@ def TripletLoss(input, label, margin=1.0):
                 distance_positive = out[j]
                 distance_negative = out[i]
                 if args.tripletratio:
-                    losses += F.relu(1 - distance_positive / (distance_negative + 0.01))
+                    losses += F.relu(1 - distance_negative / (distance_positive + 0.01))
                 else:
                     losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
