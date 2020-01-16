@@ -165,21 +165,22 @@ def LossPredLoss(input, target, margin=1.0, reduction='mean'):
 def TripletLoss(input, label, margin=1.0):
     
     m = input.size()[0]-1
-    a = input[0],label[0]
+    a = input[0]
     p = input[1:]
 
 #     losses = Variable(torch.Tensor([0]), requires_grad=True)
     losses = 0.
-    diff = torch.abs(a[0]-p)
+    diff = torch.abs(a-p)
     out = torch.pow(diff,2).sum(1)
     out = torch.pow(out,1./2)
     if args.tripletlog:
         out = torch.log(out)
+    P = [True if label[i] == label[0] else False for i in range(m)]
     
     n = 0
-    for i in range(1,m):
+    for i in range(m):
         for j in range(i+1,m):
-            if label[i] == a[1] and label[j] !=a[1]:
+            if P[i] and not P[j]:
                 distance_positive = out[i]
                 distance_negative = out[j]
                 if args.tripletratio:
@@ -187,7 +188,7 @@ def TripletLoss(input, label, margin=1.0):
                 else:
                     losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
-            elif label[i] != a[1] and label[j] ==a[1]:
+            elif not P[i] and P[j]:
                 distance_positive = out[j]
                 distance_negative = out[i]
                 if args.tripletratio:
