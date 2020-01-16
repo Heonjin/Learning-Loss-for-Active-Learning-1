@@ -56,9 +56,11 @@ parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
 parser.add_argument('--printdata', action='store_true', default = False)
 parser.add_argument('--nolog', action='store_true', default = False)
+
 parser.add_argument('--triplet', action='store_true', default = False)
 parser.add_argument('--tripletlog', action='store_true', default = False)
 parser.add_argument('--tripletratio', action='store_true', default = False)
+parser.add_argument('--numtriplet', type=int, default = 200)
 
 args = parser.parse_args()
 if args.triplet:
@@ -193,7 +195,7 @@ def TripletLoss(input, label, margin=1.0):
                 else:
                     losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
-            if n>10000:
+            if n>args.numtriplet:
                 break
         else:
             continue
