@@ -161,6 +161,7 @@ def LossPredLoss(input, target, margin=1.0, reduction='mean'):
     return loss
 
 def TripletLoss(input, label, margin=1.0):
+    
     m = input.size()[0]-1
     a = input[0],label[0]
     p = input[1:]
@@ -192,6 +193,11 @@ def TripletLoss(input, label, margin=1.0):
                 else:
                     losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
+            if n>10000:
+                break
+        else:
+            continue
+        break
 
     if losses > 0:
         return losses/n
