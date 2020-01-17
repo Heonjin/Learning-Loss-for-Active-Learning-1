@@ -44,6 +44,7 @@ class LossNet(nn.Module):
         out4 = F.relu(self.FC4(out4))
 
         out = torch.cat((out1, out2, out3, out4), 1)
+        features=out
         if self.is_norm:
             features = self.l2_norm(out)
         out = self.linear(out)
