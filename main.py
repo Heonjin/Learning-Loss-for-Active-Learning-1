@@ -51,6 +51,7 @@ parser.add_argument('--lamb2', type=float, default = 1.)
 parser.add_argument('--data', type=str, default = "CIFAR10")
 parser.add_argument('--lpl', action='store_true', default = False)
 parser.add_argument('--lamb1', type=float, default = 1.)
+parser.add_argument('--lamb3', type=float, default = .1)
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
@@ -61,6 +62,8 @@ parser.add_argument('--triplet', action='store_true', default = False)
 parser.add_argument('--tripletlog', action='store_true', default = False)
 parser.add_argument('--tripletratio', action='store_true', default = False)
 parser.add_argument('--numtriplet', type=int, default = 200)
+
+parser.add_argument('--liftedstructured','--ls', action='store_true', default = False)
 
 
 args = parser.parse_args()
@@ -79,6 +82,8 @@ if args.lrl:
     args.is_norm = False
     args.no_square = False
     pdist = L2dist(2)
+if args.liftedstructured:
+    args.is_norm = True
 if args.rule == "Entropy":
     SUBSET = 39000
 if args.seed == True:
@@ -91,6 +96,7 @@ TRIALS = args.trials
 WEIGHT = args.lamb1
 softmax = nn.Softmax(dim=1)
 print(args)
+assert not args.triplet or not args.liftedstructured, "Don't use both Triplet and SiftedStructured Losses together"
 ##
 # Data
 if args.data == "CIFAR10":
@@ -208,6 +214,69 @@ def TripletLoss(input, label, margin=1.0):
     else:
         return 0
 
+def LiftedStructureLoss(inputs, targets, off=0.2, alpha=1, beta=2, margin=0.5, hard_mining=None):
+#     alpha=40
+    n = inputs.size(0)
+    
+    if args.is_norm:
+        sim_mat = torch.matmul(inputs, inputs.t())
+    else:
+        sim_mat = -torch.matmul(inputs, inputs.t())
+        sim_mat += torch.norm(inputs, 2, dim=1)**2
+        sim_mat += sim_mat.t()
+        sim_mat = -torch.sqrt(sim_mat)
+        sim_mat = -torch.sqrt(sim_mat)+alpha
+#         sim_mat = torch.clamp(-torch.sqrt(sim_mat)+1.,min=0)
+        
+    
+    loss = list()
+    c = 0
+
+    for i in range(n):
+        pos_pair_ = torch.masked_select(sim_mat[i], targets==targets[i])
+
+        #  move itself
+        if args.is_norm:
+            pos_pair_ = torch.masked_select(pos_pair_, pos_pair_ < 1-0.001) # <1 means do not choose the two same ones.
+        else:
+            pos_pair_ = torch.masked_select(pos_pair_, pos_pair_ < 1-0.001) # <0 means do not choose the two same ones.
+        neg_pair_ = torch.masked_select(sim_mat[i], targets!=targets[i])
+
+        pos_pair_ = torch.sort(pos_pair_)[0]
+        neg_pair_ = torch.sort(neg_pair_)[0]
+
+        if hard_mining is not None:
+
+            neg_pair = torch.masked_select(neg_pair_, neg_pair_ + off > pos_pair_[0])
+            pos_pair = torch.masked_select(pos_pair_, pos_pair_ - off <  neg_pair_[-1])
+
+            if len(neg_pair) < 1 or len(pos_pair) < 1:
+                c += 1
+                continue 
+
+#             pos_loss = 2.0/beta * torch.log(torch.sum(torch.exp(-beta*pos_pair)))
+#             neg_loss = 2.0/alpha * torch.log(torch.sum(torch.exp(alpha*neg_pair)))
+            pos_loss = torch.sum(torch.clamp(pos_pair, min=0))
+            neg_loss = torch.log(torch.sum(torch.exp(torch.clamp(neg_pair,min=0))))
+        
+        else:  
+            pos_pair = pos_pair_
+            neg_pair = neg_pair_ 
+
+            pos_loss = 2.0/beta * torch.log(torch.sum(torch.exp(-beta*pos_pair)))
+            neg_loss = 2.0/alpha * torch.log(torch.sum(torch.exp(alpha*neg_pair)))
+
+        if len(neg_pair) == 0:
+            c += 1
+            continue
+
+        loss.append(pos_loss + neg_loss)
+    loss = sum(loss)/n
+    prec = float(c)/n
+    mean_neg_sim = torch.mean(neg_pair_).item()
+    mean_pos_sim = torch.mean(pos_pair_).item()
+    return loss, prec, mean_pos_sim, mean_neg_sim
+    
 def LogRatioLoss(input, value):
     m = input.size()[0]-1   # #paired
     a = input[0]            # anchor
@@ -321,6 +390,10 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             loss  = m_backbone_loss + WEIGHT * m_module_loss + args.lamb2 * loss2
         if args.triplet:
             loss += TripletLoss(features2,labels)
+        if args.liftedstructured:
+            a=LiftedStructureLoss(features2,labels)[0]
+            loss += args.lamb3 * a#LiftedStructureLoss(features2,labels)[0]
+#             print(a)
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
