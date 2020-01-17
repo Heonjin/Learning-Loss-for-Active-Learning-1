@@ -62,6 +62,7 @@ parser.add_argument('--tripletlog', action='store_true', default = False)
 parser.add_argument('--tripletratio', action='store_true', default = False)
 parser.add_argument('--numtriplet', type=int, default = 200)
 
+
 args = parser.parse_args()
 if args.triplet:
     args.nolog = True
@@ -75,7 +76,7 @@ if args.softmax or args.onehot:
     args.lrl = True
 if args.lrl:
     args.embed2embed = True
-    args.is_norm = True
+    args.is_norm = False
     args.no_square = False
     pdist = L2dist(2)
 if args.rule == "Entropy":
@@ -301,7 +302,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             features[3] = features[3].detach()
         pred_loss, embed = models['module'](features)
         pred_loss = pred_loss.view(pred_loss.size(0))
-
+        
         m_backbone_loss = torch.sum(target_loss) / target_loss.size(0)
         m_module_loss   = LossPredLoss(pred_loss, target_loss, margin=MARGIN)
         loss            = m_backbone_loss + WEIGHT * m_module_loss
