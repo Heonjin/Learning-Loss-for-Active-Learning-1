@@ -49,7 +49,6 @@ parser.add_argument('--softmax', action='store_true', default = False)
 parser.add_argument('--onehot', action='store_true', default = False)
 parser.add_argument('--lamb2', type=float, default = 1.)
 parser.add_argument('--data', type=str, default = "CIFAR10")
-parser.add_argument('--lpl', action='store_true', default = False)
 parser.add_argument('--lamb1', type=float, default = 1.)
 parser.add_argument('--lamb3', type=float, default = .1)
 parser.add_argument('--seed', action='store_true', default = False)
@@ -79,7 +78,7 @@ if args.softmax or args.onehot:
     args.lrl = True
 if args.lrl:
     args.embed2embed = True
-    args.is_norm = False
+    args.is_norm = True
     args.no_square = False
     pdist = L2dist(2)
 if args.liftedstructured:
@@ -653,20 +652,34 @@ if __name__ == '__main__':
                 plt.savefig('temp.jpg')
                 sys.exit()
             elif args.printdata:
-                import sys
+                if cycle == 0:
+                    added_line = ""
                 print('init')
                 num={ i:0 for i in classes}
                 for i in init:
                     num[classes[visual[i][1]]]+=1
                 for i in range(10):
                     print(classes[i] + ' :\t' + str(num[classes[i]]))
+                    if cycle ==0:
+                        if i ==0:
+                            added_line += '\n init'
+                        added_line += '\n' + classes[i] + ' :\t' + str(num[classes[i]])
                 print('added')
                 num={ i:0 for i in classes}
                 for i in added_set:
                     num[classes[visual[i][1]]]+=1
+                added_line += '\n added_' + str(cycle)
                 for i in range(10):
-                    print(classes[i] + ' :\t' + str(num[classes[i]]))
-                sys.exit()
+                    added_line += '\n' + classes[i] + ' :\t' + str(num[classes[i]])
+                if cycle>3:
+                    import time
+                    timestr = "./results/" + time.strftime("%Y%m%d-%H%M%S")
+                    with open(timestr + 'added.txt','w') as f:
+                        f.write(str(collect_acc))
+                        f.write('\n'+str(args))
+                        f.write(added_line)
+                    import sys
+                    sys.exit()
         
         # Save a checkpoint
         torch.save({
@@ -680,3 +693,5 @@ if __name__ == '__main__':
     with open(timestr + 'output.txt','w') as f:
         f.write(str(collect_acc))
         f.write('\n'+str(args))
+        if args.printdata:
+            f.write(added_line)
