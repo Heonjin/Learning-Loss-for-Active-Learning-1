@@ -41,8 +41,16 @@ for file in files:
         pass
     if 'lpl' in info.keys():
         name+='_lpl'
-    if info['lrl']==True:
+    elif info['lrl']==True:
         name+='_lrl'
+    
+    if info['triplet'] == True:
+        name+='_triplet'
+    if info['tripletlog'] == True:
+        name+='log'
+    if info['tripletratio'] == True:
+        name+='ratio'
+    
     if info['rule'] == 'Entropy':
         name+='_Entropy'
     if info['subset'] !=10000:
