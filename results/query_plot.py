@@ -13,6 +13,7 @@ files=args.files
 
 #files = ['MNIST_LL_Entropy_100.txt','MNIST_lrl_Entropy_100.txt']
 make = makecolor()
+names = ['init','added_0','added_1','added_2','added_3','added_4']
 for file in files:
     f=open(file,"r")
     # print(f.read())
@@ -30,7 +31,7 @@ for file in files:
                 l += int(text[loc+1:f]),
             except:
                 l += int(text[loc+1:]),
-        print(l)
+        print(names[j],'= (',str(l)[1:-1],')')
     import sys
     sys.exit()
     num = text[0:loc]
