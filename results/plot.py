@@ -50,7 +50,8 @@ for file in files:
         name+='log'
     if info['tripletratio'] == True:
         name+='ratio'
-    
+    if info['liftedstructured'] == True:
+        name+='_ls'
     if info['rule'] == 'Entropy':
         name+='_Entropy'
     if info['subset'] !=10000:
