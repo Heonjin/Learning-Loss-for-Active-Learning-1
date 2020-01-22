@@ -61,11 +61,18 @@ parser.add_argument('--triplet', action='store_true', default = False)
 parser.add_argument('--tripletlog', action='store_true', default = False)
 parser.add_argument('--tripletratio', action='store_true', default = False)
 parser.add_argument('--numtriplet', type=int, default = 200)
-
 parser.add_argument('--liftedstructured','--ls', action='store_true', default = False)
 
+parser.add_argument('--lamb4', type=float, default = .1)
+parser.add_argument('--Ltriplet', action='store_true', default = False)
+parser.add_argument('--Ltripletlog', action='store_true', default = False)
+parser.add_argument('--Ltripletratio', action='store_true', default = False)
+parser.add_argument('--Lnumtriplet', type=int, default = 200)
+parser.add_argument('--Lliftedstructured','--Lls', action='store_true', default = False)
 
 args = parser.parse_args()
+if args.Ltriplet or args.Ltripletlog or args.Ltripletratio or args.Lliftedstructured:
+    args.lamb1 = 0
 if args.triplet:
     args.nolog = True
 if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
@@ -168,7 +175,7 @@ def LossPredLoss(input, target, margin=1.0, reduction='mean'):
     
     return loss
 
-def TripletLoss(input, label, margin=1.0):
+def TripletLoss(input, label, margin=1.0, tripletlog = False, tripletratio = False, numtriplet = 200):
     
     m = input.size()[0]-1
     a = input[0]
@@ -179,7 +186,7 @@ def TripletLoss(input, label, margin=1.0):
     diff = torch.abs(a-p)
     out = torch.pow(diff,2).sum(1)
     out = torch.pow(out,1./2)
-    if args.tripletlog:
+    if tripletlog:
         out = torch.log(out)
     P = [True if label[i] == label[0] else False for i in range(m)]
     
@@ -189,7 +196,7 @@ def TripletLoss(input, label, margin=1.0):
             if P[i] and not P[j]:
                 distance_positive = out[i]
                 distance_negative = out[j]
-                if args.tripletratio:
+                if tripletratio:
                     losses += F.relu(1 - distance_negative / (distance_positive + 0.01))
                 else:
                     losses += F.relu(distance_positive - distance_negative + margin)
@@ -197,12 +204,12 @@ def TripletLoss(input, label, margin=1.0):
             elif not P[i] and P[j]:
                 distance_positive = out[j]
                 distance_negative = out[i]
-                if args.tripletratio:
+                if tripletratio:
                     losses += F.relu(1 - distance_negative / (distance_positive + 0.01))
                 else:
                     losses += F.relu(distance_positive - distance_negative + margin)
                 n+=1
-            if n>args.numtriplet:
+            if n> numtriplet:
                 break
         else:
             continue
@@ -388,11 +395,13 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
                 loss2 = LogRatioLoss(embed, features2)
             loss  = m_backbone_loss + WEIGHT * m_module_loss + args.lamb2 * loss2
         if args.triplet:
-            loss += TripletLoss(features2,labels)
+            loss += TripletLoss(features2,labels, tripletlog = args.tripletlog, tripletratio = args.tripletlog, numtriplet = args.numtriplet)
         if args.liftedstructured:
             a=LiftedStructureLoss(features2,labels)[0]
             loss += args.lamb3 * a#LiftedStructureLoss(features2,labels)[0]
 #             print(a)
+        if args.Ltriplet or args.Ltripletlog or args.Ltripletratio or args.Lliftedstructured:
+            loss += args.lamb4 * TripletLoss(embed, labels, tripletlog = args.Ltripletlog, tripletratio = args.Ltripletratio, numtriplet = args.Lnumtriplet)
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
@@ -510,6 +519,11 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
                         labeled_feat[0] = features2[i]
                         loss2 = LogRatioLoss(labeled_embed, labeled_feat)
                     uncertainty = torch.cat((uncertainty, torch.tensor([loss2]).cuda()), 0)
+#             elif args.Ltriplet or args.Ltripletlog or args.Ltripletratio or args.Lliftedstructured:
+#                 for i in range(len(features2)):
+#                     labeled_embed[0] = embed[i]
+#                     if args.rule ==
+                loss2 = TripletLoss(features2,labels, tripletlog = args.Ltripletlog, tripletratio = args.Ltripletlog, numtriplet = args.Lnumtriplet)
             else:
                 uncertainty = torch.cat((uncertainty, pred_loss), 0)
     
