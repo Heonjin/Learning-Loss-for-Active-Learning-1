@@ -36,6 +36,8 @@ for file in files:
         name+='_lrlonlywsoftmax'
     elif info['rule'] == 'lplwsoftmax':
         name+='_lplwsoftmax'
+    elif info['rule'] == 'lpl':
+        name+='_lpl'
     try:
         if info['lamb1'] == 0:
             name+='_lamb10'
