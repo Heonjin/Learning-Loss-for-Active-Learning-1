@@ -28,7 +28,9 @@ for file in files:
     info = json.loads(info)
     name=''
     name+=info['data']
-    if info['rule'] == 'lrlonly':
+    if info['rule'] == 'LL':
+        name+='_LL'
+    elif info['rule'] == 'lrlonly':
         name+='_lrlonly'
     elif info['rule'] == 'lrlonlywsoftmax':
         name+='_lrlonlywsoftmax'
