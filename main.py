@@ -689,7 +689,7 @@ if __name__ == '__main__':
                 },
                 './cifar10/train/weights/active_resnet18_cifar10_trial{}.pth'.format(trial))
     import time
-    timestr = "./results/" + time.strftime("%Y%m%d-%H%M%S")
+    timestr = "./results/"+args.data + time.strftime("%Y%m%d-%H%M%S")
     with open(timestr + 'output.txt','w') as f:
         f.write(str(collect_acc))
         f.write('\n'+str(args))
