@@ -56,6 +56,16 @@ for file in files:
         name+='ratio'
     if info['liftedstructured'] == True:
         name+='_ls'
+    
+    if info['Ltriplet'] == True:
+        name+='_Ltriplet'
+    if info['Ltripletlog'] == True:
+        name+='_Ltripletlog'
+    if info['Ltripletratio'] == True:
+        name+='_Ltripletratio'
+    if info['Lliftedstructured'] == True:
+        name+='_Lls'
+
     if info['rule'] in ['Entropy','Margin']:
         name+='_'+nfo['rule']
     if info['subset'] !=10000:
