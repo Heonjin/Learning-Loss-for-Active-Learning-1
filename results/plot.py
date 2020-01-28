@@ -56,8 +56,8 @@ for file in files:
         name+='ratio'
     if info['liftedstructured'] == True:
         name+='_ls'
-    if info['rule'] == 'Entropy':
-        name+='_Entropy'
+    if info['rule'] in ['Entropy','Margin']:
+        name+='_'+nfo['rule']
     if info['subset'] !=10000:
         name+='_p'+str(info['subset'])
     if info['lamb2'] != 1.:
