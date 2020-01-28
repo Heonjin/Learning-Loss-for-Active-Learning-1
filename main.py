@@ -47,6 +47,7 @@ parser.add_argument('--rule', type=str, default = "LL")
 parser.add_argument('--trials', type=int, default = TRIALS)
 parser.add_argument('--softmax', action='store_true', default = False)
 parser.add_argument('--onehot', action='store_true', default = False)
+parser.add_argument('--is_norm', action='store_true', default = False)
 parser.add_argument('--lamb2', type=float, default = 1.)
 parser.add_argument('--data', type=str, default = "CIFAR10")
 parser.add_argument('--lamb1', type=float, default = 1.)
@@ -88,7 +89,7 @@ if args.lrl:
     args.is_norm = True
     args.no_square = False
     pdist = L2dist(2)
-if args.liftedstructured:
+if args.liftedstructured or args.Lliftedstructured:
     args.is_norm = True
 if args.rule in ["Entropy", "Margin"]:
     args.subset = 39000
@@ -233,7 +234,6 @@ def LiftedStructureLoss(inputs, targets, off=0.2, alpha=1, beta=2, margin=0.5, h
         sim_mat = -torch.sqrt(sim_mat)
         sim_mat = -torch.sqrt(sim_mat)+alpha
 #         sim_mat = torch.clamp(-torch.sqrt(sim_mat)+1.,min=0)
-        
     
     loss = list()
     c = 0
@@ -247,15 +247,17 @@ def LiftedStructureLoss(inputs, targets, off=0.2, alpha=1, beta=2, margin=0.5, h
         else:
             pos_pair_ = torch.masked_select(pos_pair_, pos_pair_ < 1-0.001) # <0 means do not choose the two same ones.
         neg_pair_ = torch.masked_select(sim_mat[i], targets!=targets[i])
-
-        pos_pair_ = torch.sort(pos_pair_)[0]
-        neg_pair_ = torch.sort(neg_pair_)[0]
+        
+        pos_pair_ = torch.topk(pos_pair_, min(pos_pair_.size(0),5))[0]
+        neg_pair_ = torch.topk(neg_pair_, min(neg_pair_.size(0),5))[0]
+#         pos_pair_ = torch.sort(pos_pair_)[0]
+#         neg_pair_ = torch.sort(neg_pair_)[0]
 
         if hard_mining is not None:
 
             neg_pair = torch.masked_select(neg_pair_, neg_pair_ + off > pos_pair_[0])
             pos_pair = torch.masked_select(pos_pair_, pos_pair_ - off <  neg_pair_[-1])
-
+            
             if len(neg_pair) < 1 or len(pos_pair) < 1:
                 c += 1
                 continue 
@@ -363,9 +365,9 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         optimizers['backbone'].zero_grad()
         optimizers['module'].zero_grad()
 
-        if args.lrl:
-            models['backbone'].is_norm = args.is_norm
-            models['module'].is_norm = args.is_norm
+#         if args.lrl:
+        models['backbone'].is_norm = args.is_norm
+        models['module'].is_norm = args.is_norm
         scores, features2, features = models['backbone'](inputs)
         target_loss = criterion(scores, labels)
 
@@ -400,8 +402,10 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             a=LiftedStructureLoss(features2,labels)[0]
             loss += args.lamb3 * a#LiftedStructureLoss(features2,labels)[0]
 #             print(a)
-        if args.Ltriplet or args.Ltripletlog or args.Ltripletratio or args.Lliftedstructured:
+        if args.Ltriplet or args.Ltripletlog or args.Ltripletratio:
             loss += args.lamb4 * TripletLoss(embed, labels, tripletlog = args.Ltripletlog, tripletratio = args.Ltripletratio, numtriplet = args.Lnumtriplet)
+        elif args.Lliftedstructured:
+            loss += args.lamb4 * LiftedStructureLoss(embed,labels)[0]
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
