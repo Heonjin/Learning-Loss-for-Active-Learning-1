@@ -90,8 +90,8 @@ if args.lrl:
     pdist = L2dist(2)
 if args.liftedstructured:
     args.is_norm = True
-if args.rule == "Entropy":
-    SUBSET = 39000
+if args.rule in ["Entropy", "Margin"]:
+    args.subset = 39000
 if args.seed == True:
     args.trials = 1
 ADDENDUM = args.query
@@ -622,6 +622,14 @@ if __name__ == '__main__':
                 probs = predict_prob(models, unlabeled_loader)
                 log_probs = torch.log(probs)
                 U = (probs*log_probs).sum(1)
+                init = labeled_set[:]
+                added_set = list(torch.tensor(subset)[U.sort()[1][:ADDENDUM]].numpy())
+                labeled_set += list(torch.tensor(subset)[U.sort()[1][:ADDENDUM]].numpy())
+                unlabeled_set = list(torch.tensor(subset)[U.sort()[1][ADDENDUM:]].numpy()) + unlabeled_set[SUBSET:]
+            elif args.rule == "Margin":
+                probs = predict_prob(models, unlabeled_loader)
+                probs_sorted, idxs = probs.sort(descending=True)
+                U = probs_sorted[:, 0] - probs_sorted[:,1]
                 init = labeled_set[:]
                 added_set = list(torch.tensor(subset)[U.sort()[1][:ADDENDUM]].numpy())
                 labeled_set += list(torch.tensor(subset)[U.sort()[1][:ADDENDUM]].numpy())
