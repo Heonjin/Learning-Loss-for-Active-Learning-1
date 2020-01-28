@@ -67,7 +67,7 @@ for file in files:
         name+='_Lls'
 
     if info['rule'] in ['Entropy','Margin']:
-        name+='_'+nfo['rule']
+        name+='_'+info['rule']
     if info['subset'] == info['query']:
         name+='_random'
     elif info['subset'] !=10000:
