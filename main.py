@@ -250,6 +250,8 @@ def LiftedStructureLoss(inputs, targets, off=0.2, alpha=1, beta=2, margin=0.5, h
         
         pos_pair_ = torch.topk(pos_pair_, min(pos_pair_.size(0),5))[0]
         neg_pair_ = torch.topk(neg_pair_, min(neg_pair_.size(0),5))[0]
+        
+        ####original loss
 #         pos_pair_ = torch.sort(pos_pair_)[0]
 #         neg_pair_ = torch.sort(neg_pair_)[0]
 
@@ -361,7 +363,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         inputs = data[0].cuda()
         labels = data[1].cuda()
         iters += 1
-
+        
         optimizers['backbone'].zero_grad()
         optimizers['module'].zero_grad()
 
@@ -598,6 +600,17 @@ if __name__ == '__main__':
 
             optimizers = {'backbone': optim_backbone, 'module': optim_module}
             schedulers = {'backbone': sched_backbone, 'module': sched_module}
+            
+            if cycle < 2:
+                args.lamb4 = 1.0
+            elif cycle < 4:
+                args.lamb4 = 0.7
+            elif cycle < 6:
+                args.lamb4 = 0.5
+            elif cycle < 8:
+                args.lamb4 = 0.3
+            else:
+                args.lamb4 = 0.1
 
             # Training and test
             train(models, criterion, optimizers, schedulers, dataloaders, EPOCH, EPOCHL, vis, plot_data)
