@@ -48,10 +48,10 @@ parser.add_argument('--trials', type=int, default = TRIALS)
 parser.add_argument('--softmax', action='store_true', default = False)
 parser.add_argument('--onehot', action='store_true', default = False)
 parser.add_argument('--is_norm', action='store_true', default = False)
-parser.add_argument('--lamb2', type=float, default = 1.)
+parser.add_argument('--lamb2', type=float, default = 0)
 parser.add_argument('--data', type=str, default = "CIFAR10")
-parser.add_argument('--lamb1', type=float, default = 1.)
-parser.add_argument('--lamb3', type=float, default = .1)
+parser.add_argument('--lamb1', type=float, default = 0)
+parser.add_argument('--lamb3', type=float, default = 0)
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
@@ -64,7 +64,7 @@ parser.add_argument('--tripletratio', action='store_true', default = False)
 parser.add_argument('--numtriplet', type=int, default = 200)
 parser.add_argument('--liftedstructured','--ls', action='store_true', default = False)
 
-parser.add_argument('--lamb4', type=float, default = .1)
+parser.add_argument('--lamb4', type=float, default = 0)
 parser.add_argument('--Ltriplet', action='store_true', default = False)
 parser.add_argument('--Ltripletlog', action='store_true', default = False)
 parser.add_argument('--Ltripletratio', action='store_true', default = False)
@@ -72,29 +72,20 @@ parser.add_argument('--Lnumtriplet', type=int, default = 200)
 parser.add_argument('--Lliftedstructured','--Lls', action='store_true', default = False)
 
 args = parser.parse_args()
-if args.Ltriplet or args.Ltripletlog or args.Ltripletratio or args.Lliftedstructured:
-    args.lamb1 = 0
 if args.triplet:
     args.nolog = True
-if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
-    args.lrl = True
-if args.rule in ["lrlonlywsoftmax", "lplwsoftmax"]:
-    args.softmax = True
-if args.rule in ["lpl", "lplwsoftmax"]:
-    args.lrl = True
-if args.softmax or args.onehot:
-    args.lrl = True
-if args.lrl:
-    args.embed2embed = True
-    args.is_norm = True
-    args.no_square = False
-    pdist = L2dist(2)
-if args.liftedstructured or args.Lliftedstructured:
-    args.is_norm = True
+args.embed2embed = True
+args.is_norm = True
+args.no_square = False
+pdist = L2dist(2)
 if args.rule in ["Entropy", "Margin"]:
     args.subset = 39000
 if args.seed == True:
     args.trials = 1
+if args.Ltripletlog or args.Ltripletratio:
+    args.Ltriplet = True
+if args.tripletlog or args.tripletratio:
+    args.triplet = True
 ADDENDUM = args.query
 EPOCH = args.epoch
 CYCLES = args.cycles
@@ -383,11 +374,14 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         pred_loss = pred_loss.view(pred_loss.size(0))
         
         m_backbone_loss = torch.sum(target_loss) / target_loss.size(0)
-        m_module_loss   = LossPredLoss(pred_loss, target_loss, margin=MARGIN)
-        loss            = m_backbone_loss + WEIGHT * m_module_loss
-        
-        if args.lrl:
-            if args.softmax or args.rule == "lplwsoftmax":
+        loss            = m_backbone_loss
+        #
+        if args.lamb1 != 0:
+            m_module_loss   = LossPredLoss(pred_loss, target_loss, margin=MARGIN)
+            loss += args.lamb1 * m_module_loss
+        ##
+        if args.lamb2 != 0:
+            if args.softmax:
                 loss2 = LogRatioLoss(scores,embed)
             elif args.onehot:
                 labels=labels.unsqueeze(1)
@@ -397,17 +391,27 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
                 loss2 = LogRatioLoss(y_onehot, embed)
             else:
                 loss2 = LogRatioLoss(embed, features2)
-            loss  = m_backbone_loss + WEIGHT * m_module_loss + args.lamb2 * loss2
-        if args.triplet:
-            loss += TripletLoss(features2,labels, tripletlog = args.tripletlog, tripletratio = args.tripletlog, numtriplet = args.numtriplet)
-        if args.liftedstructured:
-            a=LiftedStructureLoss(features2,labels)[0]
-            loss += args.lamb3 * a#LiftedStructureLoss(features2,labels)[0]
-#             print(a)
-        if args.Ltriplet or args.Ltripletlog or args.Ltripletratio:
-            loss += args.lamb4 * TripletLoss(embed, labels, tripletlog = args.Ltripletlog, tripletratio = args.Ltripletratio, numtriplet = args.Lnumtriplet)
-        elif args.Lliftedstructured:
-            loss += args.lamb4 * LiftedStructureLoss(embed,labels)[0]
+
+            loss += args.lamb2 * loss2
+        ###
+        if args.lamb3 != 0:
+            if args.triplet or args.tripletlog or args.tripletratio:
+                loss3 = TripletLoss(features2,labels, tripletlog = args.tripletlog, tripletratio = args.tripletlog, numtriplet = args.numtriplet)
+            elif args.liftedstructured:
+                loss3 = LiftedStructureLoss(features2,labels)[0]
+            else:
+                assert False, "Choose triplet or liftedstructured"
+            loss += args.lamb3 * loss3
+        ####
+        if args.lamb4 != 0:
+            if args.Ltriplet or args.Ltripletlog or args.Ltripletratio:
+                loss4 = TripletLoss(embed, labels, tripletlog = args.Ltripletlog, tripletratio = args.Ltripletratio, numtriplet = args.Lnumtriplet)
+            elif args.Lliftedstructured:
+                loss4 = LiftedStructureLoss(embed,labels)[0]
+            else:
+                assert False, "Choose Ltriplet or Lliftedstructured"
+            loss += args.lamb4 * loss4
+        
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
@@ -507,31 +511,20 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
             pred_loss, embed = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
             pred_loss = pred_loss.view(pred_loss.size(0))
             
-            ### LL plus LRL = lpl
-            if args.rule == "lpl":
-                loss2 = LogRatioLoss(embed, features2)
-                pred_loss = WEIGHT * pred_loss + args.lamb2 * loss2
-            elif args.rule == "lplwsoftmax":
-                loss2 = LogRatioLoss(scores,embed)
-                pred_loss = WEIGHT * pred_loss + args.lamb2 * loss2
-            ### pick by lrl only
-            if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
+            if args.rule == "Random":
+                return torch.rand([args.subset])
+            elif args.rule == "PredictedLoss":
+                uncertainty = torch.cat((uncertainty, pred_loss), 0)
+            elif args.rule == "lrl":
                 for i in range(len(features2)):
                     labeled_embed[0] = embed[i]
-                    if args.rule == "lrlonlywsoftmax":
+                    if args.softmax:
                         labeled_scores[0] = scores[i]
                         loss2 = LogRatioLoss(labeled_embed, labeled_scores)
                     else:
                         labeled_feat[0] = features2[i]
                         loss2 = LogRatioLoss(labeled_embed, labeled_feat)
                     uncertainty = torch.cat((uncertainty, torch.tensor([loss2]).cuda()), 0)
-#             elif args.Ltriplet or args.Ltripletlog or args.Ltripletratio or args.Lliftedstructured:
-#                 for i in range(len(features2)):
-#                     labeled_embed[0] = embed[i]
-#                     if args.rule ==
-                loss2 = TripletLoss(features2,labels, tripletlog = args.Ltripletlog, tripletratio = args.Ltripletlog, numtriplet = args.Lnumtriplet)
-            else:
-                uncertainty = torch.cat((uncertainty, pred_loss), 0)
     
     return uncertainty.cpu()
 
@@ -601,16 +594,17 @@ if __name__ == '__main__':
             optimizers = {'backbone': optim_backbone, 'module': optim_module}
             schedulers = {'backbone': sched_backbone, 'module': sched_module}
             
-            if cycle < 2:
-                args.lamb4 = 1.0
-            elif cycle < 4:
-                args.lamb4 = 0.7
-            elif cycle < 6:
-                args.lamb4 = 0.5
-            elif cycle < 8:
-                args.lamb4 = 0.3
-            else:
-                args.lamb4 = 0.1
+            if args.Lliftedstructured:
+                if cycle < 2:
+                    args.lamb4 = 1.0
+                elif cycle < 4:
+                    args.lamb4 = 0.7
+                elif cycle < 6:
+                    args.lamb4 = 0.5
+                elif cycle < 8:
+                    args.lamb4 = 0.3
+                else:
+                    args.lamb4 = 0.1
 
             # Training and test
             train(models, criterion, optimizers, schedulers, dataloaders, EPOCH, EPOCHL, vis, plot_data)
@@ -653,7 +647,7 @@ if __name__ == '__main__':
                 unlabeled_set = list(torch.tensor(subset)[U.sort()[1][ADDENDUM:]].numpy()) + unlabeled_set[SUBSET:]
             else:
                 # Measure uncertainty of each data points in the subset
-                if args.rule in ["lrlonly", "lrlonlywsoftmax"]:
+                if args.rule == 'lrl':
                     uncertainty = get_uncertainty(models, unlabeled_loader, labeled_loader)
                 else:
                     uncertainty = get_uncertainty(models, unlabeled_loader)

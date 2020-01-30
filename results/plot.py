@@ -28,52 +28,75 @@ for file in files:
     info = json.loads(info)
     name=''
     name+=info['data']
-    if info['rule'] == 'LL':
-        name+='_LL'
-    elif info['rule'] == 'lrlonly':
-        name+='_lrlonly'
-    elif info['rule'] == 'lrlonlywsoftmax':
-        name+='_lrlonlywsoftmax'
-    elif info['rule'] == 'lplwsoftmax':
-        name+='_lplwsoftmax'
-    elif info['rule'] == 'lpl':
-        name+='_lpl'
-    try:
-        if info['lamb1'] == 0:
-            name+='_lamb10'
-    except:
-        pass
-    if 'lpl' in info.keys():
-        name+='_lpl'
-    elif info['lrl']==True:
-        name+='_lrl'
+#     if info['rule'] == 'LL':
+#         name+='_LL'
+#     elif info['rule'] == 'lrlonly':
+#         name+='_lrlonly'
+#     elif info['rule'] == 'lrlonlywsoftmax':
+#         name+='_lrlonlywsoftmax'
+#     elif info['rule'] == 'lplwsoftmax':
+#         name+='_lplwsoftmax'
+#     elif info['rule'] == 'lpl':
+#         name+='_lpl'
+#     try:
+#         if info['lamb1'] == 0:
+#             name+='_lamb10'
+#     except:
+#         pass
+#     if 'lpl' in info.keys():
+#         name+='_lpl'
+#     elif info['lrl']==True:
+#         name+='_lrl'
     
-    if info['triplet'] == True:
-        name+='_triplet'
-    if info['tripletlog'] == True:
-        name+='log'
-    if info['tripletratio'] == True:
-        name+='ratio'
-    if info['liftedstructured'] == True:
-        name+='_ls'
+#     if info['triplet'] == True:
+#         name+='_triplet'
+#     if info['tripletlog'] == True:
+#         name+='log'
+#     if info['tripletratio'] == True:
+#         name+='ratio'
+#     if info['liftedstructured'] == True:
+#         name+='_ls'
     
-    if info['Ltriplet'] == True:
-        name+='_Ltriplet'
-    if info['Ltripletlog'] == True:
-        name+='_Ltripletlog'
-    if info['Ltripletratio'] == True:
-        name+='_Ltripletratio'
-    if info['Lliftedstructured'] == True:
-        name+='_Lls'
+#     if info['Ltriplet'] == True:
+#         name+='_Ltriplet'
+#     if info['Ltripletlog'] == True:
+#         name+='_Ltripletlog'
+#     if info['Ltripletratio'] == True:
+#         name+='_Ltripletratio'
+#     if info['Lliftedstructured'] == True:
+#         name+='_Lls'
 
-    if info['rule'] in ['Entropy','Margin']:
-        name+='_'+info['rule']
-    if info['subset'] == info['query']:
-        name+='_random'
+#     if info['rule'] in ['Entropy','Margin']:
+#         name+='_'+info['rule']
+#     if info['subset'] == info['query']:
+#         name+='_random'
+    name += '_pick:' + info['rule']
+    if info['lamb1'] != 0:
+        name +='_MRL_lamb1'+ str(info['lamb1']).replace(".","")
+    if info['lamb2'] != 0:
+        name +='_lrl_lamb2'+ str(info['lamb2']).replace(".","")
+    if info['lamb3'] != 0:
+        name += '_lamb3'+ str(info['lamb3']).replace(".","")
+        if info['triplet']:
+            name += '_triplet'
+        elif info['tripletlog']:
+            name += '_tripletlog'
+        elif info['tripletratio']:
+            name += '_tripletratio'
+        elif info['liftedstructured']:
+            name += '_ls'
+    if info['lamb4'] != 0:
+        name +='__lamb4'+ str(info['lamb4']).replace(".","")
+        if info['Ltriplet']:
+            name += '_Ltriplet'
+        elif info['Ltripletlog']:
+            name += '_Ltripletlog'
+        elif info['Ltripletratio']:
+            name += '_Ltripletratio'
+        elif info['Lliftedstructured']:
+            name += '_Lls'
     elif info['subset'] !=10000:
         name+='_p'+str(info['subset'])
-    if info['lamb2'] != 1.:
-        name+='_lamb2'+str(int(info['lamb2']))
     if info['lrlbatch'] != 128:
         name+='_lrlbatch'+str(info['lrlbatch'])
     print(name+' = np.array('+num+')')
