@@ -77,24 +77,24 @@ for file in files:
         name +='_lrl_lamb2'+ str(info['lamb2']).replace(".","")
     if info['lamb3'] != 0:
         name += '_lamb3'+ str(info['lamb3']).replace(".","")
-        if info['triplet']:
-            name += '_triplet'
-        elif info['tripletlog']:
+        if info['tripletlog']:
             name += '_tripletlog'
         elif info['tripletratio']:
             name += '_tripletratio'
         elif info['liftedstructured']:
             name += '_ls'
+        elif info['triplet']:
+            name += '_triplet'
     if info['lamb4'] != 0:
         name +='__lamb4'+ str(info['lamb4']).replace(".","")
-        if info['Ltriplet']:
-            name += '_Ltriplet'
-        elif info['Ltripletlog']:
+        if info['Ltripletlog']:
             name += '_Ltripletlog'
         elif info['Ltripletratio']:
             name += '_Ltripletratio'
         elif info['Lliftedstructured']:
             name += '_Lls'
+        elif info['Ltriplet']:
+            name += '_Ltriplet'
     elif info['subset'] !=10000:
         name+='_p'+str(info['subset'])
     if info['lrlbatch'] != 128:
