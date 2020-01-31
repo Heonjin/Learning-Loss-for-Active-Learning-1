@@ -70,7 +70,7 @@ for file in files:
 #         name+='_'+info['rule']
 #     if info['subset'] == info['query']:
 #         name+='_random'
-    name += '_pick:' + info['rule']
+    name += '_pick' + info['rule']
     if info['lamb1'] != 0:
         name +='_MRL_lamb1'+ str(info['lamb1']).replace(".","")
     if info['lamb2'] != 0:
