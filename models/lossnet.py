@@ -23,8 +23,10 @@ class LossNet(nn.Module):
         self.FC4 = nn.Linear(num_channels[3], interm_dim)
 
         self.linear = nn.Linear(4 * interm_dim, 1)
+        self.linear2 = nn.Linear(4 * interm_dim, 10)
         
         self.is_norm = False
+        self.lfc = False
     
     def forward(self, features):
         out1 = self.GAP1(features[0])
@@ -46,10 +48,12 @@ class LossNet(nn.Module):
         out = torch.cat((out1, out2, out3, out4), 1)
         features=out
         if self.is_norm:
-            features = self.l2_norm(out)
+            dim_512 = self.l2_norm(out)
+        if self.lfc:
+            dim_10 = self.linear2(out)
         out = self.linear(out)
         
-        return out, features
+        return out, dim_10, dim_512
     
     def l2_norm(self,input):
         input_size = input.size()

@@ -55,6 +55,7 @@ parser.add_argument('--lamb2', type=float, default = 0)
 parser.add_argument('--data', type=str, default = "CIFAR10")
 parser.add_argument('--lamb1', type=float, default = 0)
 parser.add_argument('--lamb3', type=float, default = 0)
+parser.add_argument('--lamb5', type=float, default = 0)
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
@@ -259,7 +260,7 @@ def LiftedStructureLoss(inputs, targets, off=0.2, alpha=1, beta=2, margin=0.5, h
         neg_pair_ = torch.masked_select(sim_mat[i], targets!=targets[i])
         
         pos_pair_ = torch.topk(pos_pair_, min(pos_pair_.size(0),5))[0]
-        neg_pair_ = torch.topk(neg_pair_, min(neg_pair_.size(0),5))[0]
+        neg_pair_ = -torch.topk(-neg_pair_, min(neg_pair_.size(0),5))[0]
         
         ####original loss
 #         pos_pair_ = torch.sort(pos_pair_)[0]
@@ -383,6 +384,8 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
 #         if args.lrl:
         models['backbone'].is_norm = args.is_norm
         models['module'].is_norm = args.is_norm
+        if args.lamb5 != 0:
+            models['module'].lfc = True
         scores, features2, features = models['backbone'](inputs)
         target_loss = criterion(scores, labels)
 
@@ -392,7 +395,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             features[1] = features[1].detach()
             features[2] = features[2].detach()
             features[3] = features[3].detach()
-        pred_loss, embed = models['module'](features)
+        pred_loss, dim_10, embed = models['module'](features)
         pred_loss = pred_loss.view(pred_loss.size(0))
         
         m_backbone_loss = torch.sum(target_loss) / target_loss.size(0)
@@ -433,6 +436,11 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             else:
                 assert False, "Choose Ltriplet or Lliftedstructured"
             loss += args.lamb4 * loss4
+        #####
+        if args.lamb5 != 0:
+            module_loss = criterion(dim_10, labels)
+            loss5 =  torch.sum(module_loss) / module_loss.size(0)
+            loss += args.lamb5 * loss5
         
         loss.backward()
         optimizers['backbone'].step()
@@ -524,7 +532,7 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
                 labeles = labeles.cuda()
                 
                 labeled_scores, labeled_feat,features = models['backbone'](inputs)
-                pred_loss, labeled_embed = models['module'](features)
+                pred_loss, dim_10, labeled_embed = models['module'](features)
                 break
                 
     with torch.no_grad():
@@ -533,7 +541,7 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
             # labels = labels.cuda()
 
             scores, features2,features = models['backbone'](inputs)
-            pred_loss, embed = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
+            pred_loss, dim_10, embed = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
             pred_loss = pred_loss.view(pred_loss.size(0))
             
             if args.rule == "Random":
