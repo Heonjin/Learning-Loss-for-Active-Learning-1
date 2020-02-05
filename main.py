@@ -22,14 +22,15 @@ from torch.autograd import Variable
 # Torchvison
 import torchvision.transforms as T
 import torchvision.models as models
-from torchvision.datasets import CIFAR100, CIFAR10,MNIST,FashionMNIST,SVHN
+from torchvision.datasets import CIFAR100, CIFAR10,MNIST,FashionMNIST,SVHN,STL10
 
 # Utils
 import numpy
 import visdom
 from tqdm import tqdm
 import argparse
-from utils import L2dist
+from utils import L2dist, tsne
+from tensorboardX import SummaryWriter
 
 # Custom
 import models.resnet as resnet
@@ -107,6 +108,8 @@ elif args.data == "MNIST":
     Nor = T.Normalize((0.1307,), (0.3081,))
 elif args.data == "FashionMNIST":
     Nor = T.Normalize((0.1307,), (0.3081,))
+elif args.data == "STL10":
+    Nor = T.Normalize((.5, .5, .5), (.5, .5, .5))
 train_transform = T.Compose([
     T.RandomHorizontalFlip(),
     T.RandomCrop(size=32, padding=4),
@@ -138,6 +141,20 @@ elif args.data == "FashionMNIST":
     cifar10_train = FashionMNIST('./FashionMNIST', train=True, download=True, transform=train_transform)
     cifar10_unlabeled   = FashionMNIST('./FashionMNIST', train=True, download=True, transform=test_transform)
     cifar10_test  = FashionMNIST('./FashionMNIST', train=False, download=True, transform=test_transform)
+elif args.data == "STL10":
+    train_transform = T.Compose([
+        T.Pad(4),
+#         T.RandomCrop(size=96),
+        T.RandomCrop(size=32),
+        T.RandomHorizontalFlip(),
+        T.ToTensor(),
+        Nor
+        ])
+    cifar10_train = STL10('./stl10-data', split='train', download=True, transform=train_transform)
+    cifar10_unlabeled = STL10('./stl10-data', split='train', download=True, transform=test_transform)
+    cifar10_test  = STL10('./stl10-data', split='test', download=True, transform=test_transform)
+    NUM_TRAIN = len(cifar10_train)
+    SUBSET = 1000
 
 transform = T.Compose(
     [T.ToTensor(),
@@ -343,13 +360,15 @@ def LogRatioLoss(input, value):
 ##
 # Train Utils
 iters = 0
+writer = SummaryWriter(comment='embedding_training')
 
 #
 def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, vis=None, plot_data=None):
     models['backbone'].train()
     models['module'].train()
-    global iters
-
+    global iters, writer
+    
+#     [print(data,c) for data,c in dataloaders['train']]
     for data in tqdm(dataloaders['train'], leave=False, total=len(dataloaders['train'])):
         inputs = data[0].cuda()
         labels = data[1].cuda()
@@ -415,7 +434,10 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
-
+        
+        if (iters % 50 == 0):
+            writer = tsne(writer, embed, labels, iters)#, image=inputs)
+        
         # Visualize
         if (iters % 100 == 0) and (vis != None) and (plot_data != None):
             plot_data['X'].append(iters)
@@ -572,7 +594,7 @@ if __name__ == '__main__':
         # Model
         if args.data == "CIFAR100":
             resnet18    = resnet.ResNet18(num_classes=100).cuda()
-        elif args.data in ["CIFAR10","SVHN"]:
+        elif args.data in ["CIFAR10","SVHN","STL10"]:
             resnet18    = resnet.ResNet18(num_classes=10).cuda()
         else:
             resnet18    = resnet.ResNet18(num_classes=10,in_channel=1).cuda()
@@ -666,7 +688,7 @@ if __name__ == '__main__':
             dataloaders['train'] = DataLoader(cifar10_train, batch_size=BATCH, 
                                               sampler=SubsetRandomSampler(labeled_set), 
                                               pin_memory=True)
-            
+            writer.close()
             classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
             if args.savedata:
                 import sys

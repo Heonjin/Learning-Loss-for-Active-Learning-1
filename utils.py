@@ -12,7 +12,6 @@ import scipy.misc
 import torch
 from torch.autograd import Function, Variable
 
-
 class Squared_L2dist(Function):
     def __init__(self, p):
         super(Squared_L2dist, self).__init__()
@@ -85,3 +84,17 @@ def eval_retrieval(dir, embed_all, num_data_val):
     nDCG = np.mean(nDCG, 0)
 
     return mean_distance, nDCG
+
+def tsne(writer, embeddings, label, n_iter, image=None):
+    if image is None:
+        writer.add_embedding(
+                    embeddings, # embeddings
+                    metadata=label.data,   # label
+                    global_step=n_iter)
+    else:
+        writer.add_embedding(
+                    embeddings, # embeddings
+                    metadata=label.data,   # label
+                    label_img=image.data,   # label_image 
+                    global_step=n_iter)
+    return writer
