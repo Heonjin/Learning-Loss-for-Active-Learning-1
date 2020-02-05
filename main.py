@@ -46,6 +46,8 @@ parser.add_argument('--cycles', type=int, default = 10)
 parser.add_argument('--subset', type=int, default = 10000)
 parser.add_argument('--rule', type=str, default = "Random")
 parser.add_argument('--trials', type=int, default = TRIALS)
+parser.add_argument('--embedding', action='store_true', default = False)
+
 parser.add_argument('--softmax', action='store_true', default = False)
 parser.add_argument('--onehot', action='store_true', default = False)
 parser.add_argument('--is_norm', action='store_true', default = False)
@@ -360,7 +362,8 @@ def LogRatioLoss(input, value):
 ##
 # Train Utils
 iters = 0
-writer = SummaryWriter(comment='embedding_training')
+if args.embedding:
+    writer = SummaryWriter(comment='embedding_training')
 
 #
 def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, vis=None, plot_data=None):
@@ -435,7 +438,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         optimizers['backbone'].step()
         optimizers['module'].step()
         
-        if (iters % 50 == 0):
+        if args.embedding and (iters % 50 == 0):
             writer = tsne(writer, embed, labels, iters)#, image=inputs)
         
         # Visualize
@@ -688,7 +691,8 @@ if __name__ == '__main__':
             dataloaders['train'] = DataLoader(cifar10_train, batch_size=BATCH, 
                                               sampler=SubsetRandomSampler(labeled_set), 
                                               pin_memory=True)
-            writer.close()
+            if args.embedding:
+                writer.close()
             classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
             if args.savedata:
                 import sys
