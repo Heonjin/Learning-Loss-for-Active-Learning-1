@@ -31,6 +31,7 @@ from tqdm import tqdm
 import argparse
 from utils import L2dist, tsne
 from tensorboardX import SummaryWriter
+import time
 
 # Custom
 import models.resnet as resnet
@@ -47,6 +48,7 @@ parser.add_argument('--subset', type=int, default = 10000)
 parser.add_argument('--rule', type=str, default = "Random")
 parser.add_argument('--trials', type=int, default = TRIALS)
 parser.add_argument('--embedding', action='store_true', default = False)
+parser.add_argument('--everyinit', action='store_true', default = False)
 
 parser.add_argument('--softmax', action='store_true', default = False)
 parser.add_argument('--onehot', action='store_true', default = False)
@@ -445,8 +447,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
-        
-        if args.embedding and (iters % 50 == 0):
+        if args.embedding and (iters % 200 == 0):
             writer = tsne(writer, embed, labels, iters)#, image=inputs)
         
         # Visualize
@@ -609,12 +610,18 @@ if __name__ == '__main__':
             resnet18    = resnet.ResNet18(num_classes=10).cuda()
         else:
             resnet18    = resnet.ResNet18(num_classes=10,in_channel=1).cuda()
+        if args.everyinit:
+            timestr = "./initials/" + args.data +'_'+ time.strftime("%m%d-%H%M%S")
+            torch.save(resnet18.state_dict(), timestr + '.pth')
         loss_module = lossnet.LossNet().cuda()
         models      = {'backbone': resnet18, 'module': loss_module}
         torch.backends.cudnn.benchmark = True
         
         # Active learning cycles
         for cycle in range(CYCLES):
+            if args.everyinit:
+                resnet18.load_state_dict(torch.load(timestr + '.pth'))
+                resnet18.eval()
             # Loss, criterion and scheduler (re)initialization
             criterion      = nn.CrossEntropyLoss(reduction='none')
             optim_backbone = optim.SGD(models['backbone'].parameters(), lr=LR, 
@@ -748,17 +755,18 @@ if __name__ == '__main__':
                     import sys
                     sys.exit()
         
-        # Save a checkpoint
-        torch.save({
-                    'trial': trial + 1,
-                    'state_dict_backbone': models['backbone'].state_dict(),
-                    'state_dict_module': models['module'].state_dict()
-                },
-                './cifar10/train/weights/active_resnet18_cifar10_trial{}.pth'.format(trial))
-    import time
+#         # Save a checkpoint
+#         torch.save({
+#                     'trial': trial + 1,
+#                     'state_dict_backbone': models['backbone'].state_dict(),
+#                     'state_dict_module': models['module'].state_dict()
+#                 },
+#                 './cifar10/train/weights/active_resnet18_cifar10_trial{}.pth'.format(trial))
+        os.remove(timestr+ '.pth')
     timestr = "./results/"+args.data + time.strftime("%Y%m%d-%H%M%S")
     with open(timestr + 'output.txt','w') as f:
         f.write(str(collect_acc))
         f.write('\n'+str(args))
         if args.printdata:
             f.write(added_line)
+    

@@ -46,7 +46,7 @@ class LossNet(nn.Module):
         out4 = F.relu(self.FC4(out4))
 
         out = torch.cat((out1, out2, out3, out4), 1)
-        features=out
+        features=dim_10=out
         if self.is_norm:
             dim_512 = self.l2_norm(out)
         if self.lfc:
