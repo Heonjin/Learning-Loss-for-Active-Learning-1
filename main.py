@@ -359,7 +359,7 @@ def GAN(real_img, fake, netG, netD):
     #  the progression of the generator
     fixed_noise = torch.randn(real_img.size(0), real_img.size(1), device='cuda')
     # Setup Adam optimizers for both G and D
-    optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
+    optimizerD = optim.Adam(netD.parameters(), lr=0.0002, betas=(beta1, 0.999))
     img_list = []
     G_losses = []
     D_losses = []
@@ -572,8 +572,9 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             loss += args.lamb6 * l1_loss
         if args.lamb7 != 0:
             #nets
-            netG = Generator().to('cuda')
-            netG.apply(weights_init)
+            if cycle == 0:
+                netG = Generator().to('cuda')
+                netG.apply(weights_init)
             
             noise = torch.randn(embed.size(0), 100, 1, 1, device='cuda')
             
@@ -590,7 +591,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             ############################
             # (2) Update G network: maximize log(D(G(z)))
             ###########################
-            optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(beta1, 0.999))
+            optimizerG = optim.Adam(netG.parameters(), lr=0.0002, betas=(beta1, 0.999))
             criterion_GAN = nn.BCELoss()
             b_size = fake.size(0)
             netG.zero_grad()
