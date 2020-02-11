@@ -58,6 +58,8 @@ parser.add_argument('--data', type=str, default = "CIFAR10")
 parser.add_argument('--lamb1', type=float, default = 0)
 parser.add_argument('--lamb3', type=float, default = 0)
 parser.add_argument('--lamb5', type=float, default = 0)
+parser.add_argument('--lamb6', type=float, default = 0)
+parser.add_argument('--lamb7', type=float, default = 0)
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
@@ -149,8 +151,8 @@ elif args.data == "FashionMNIST":
 elif args.data == "STL10":
     train_transform = T.Compose([
         T.Pad(4),
-#         T.RandomCrop(size=96),
-        T.RandomCrop(size=32),
+        T.RandomCrop(size=96),
+#         T.RandomCrop(size=32),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         Nor
@@ -299,6 +301,118 @@ def LiftedStructureLoss(inputs, targets, off=0.2, alpha=1, beta=2, margin=0.5, h
     mean_neg_sim = torch.mean(neg_pair_).item()
     mean_pos_sim = torch.mean(pos_pair_).item()
     return loss, prec, mean_pos_sim, mean_neg_sim
+
+class Generator(nn.Module):
+    def __init__(self):#, ngpu):
+        super(Generator, self).__init__()
+        self.ngpu = 1
+        self.main = nn.Sequential(
+            # input is Z, going into a convolution
+            nn.ConvTranspose2d( nz, ngf * 4, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.ReLU(True),
+            # state size. (ngf*4) x 4 x 4
+            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.ReLU(True),
+            # state size. (ngf*2) x 8 x 8
+            nn.ConvTranspose2d( ngf * 2, ngf * 1, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 1),
+            nn.ReLU(True),
+            # state size. (ngf*1) x 16 x 16
+#             nn.ConvTranspose2d( ngf * 1, ngf, 4, 2, 1, bias=False),
+#             nn.BatchNorm2d(ngf),
+#             nn.ReLU(True),
+#             # state size. (ngf) x 32 x 32
+            nn.ConvTranspose2d( ngf, 3, 4, 2, 1, bias=False),
+            nn.Tanh()
+            # state size. (3) x 32 x 32
+        )
+
+    def forward(self, input):
+        return self.main(input)
+
+# Size of z latent vector (i.e. size of generator input)
+nz = 100
+
+# Size of feature maps in generator
+ngf = 64
+
+# Size of feature maps in discriminator
+ndf = 64
+
+# Beta1 hyperparam for Adam optimizers
+beta1 = 0.5
+
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
+
+def GAN(real_img, fake, netG, netD):
+    criterion = nn.BCELoss()
+
+    # Create batch of latent vectors that we will use to visualize
+    #  the progression of the generator
+    fixed_noise = torch.randn(real_img.size(0), real_img.size(1), device='cuda')
+    # Setup Adam optimizers for both G and D
+    optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
+    img_list = []
+    G_losses = []
+    D_losses = []
+#     iters = 0
+#     scores, features2, features = models['backbone'](inputs)
+#     print("Starting Training Loop...")
+
+    ############################
+    # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+    ## Train with all-real batch
+    # Format batch
+    b_size = real_img.size(0)
+    label = torch.full((b_size,), 1, device='cuda')
+    output = models['module'](netD(real_img)[-1])[0]
+    output = torch.sigmoid(output).view(-1)
+    errD_real = criterion(output, label)
+    errD_real.backward()
+    D_x = output.mean().item()
+
+    ## Train with all-fake batch
+    # Generate batch of latent vectors
+    noise = torch.randn(b_size, nz, 1, 1, device='cuda')
+    label.fill_(0)
+    output = models['module'](netD(fake.detach())[-1])[0]
+    output = torch.sigmoid(output).view(-1)
+    errD_fake = criterion(output, label)
+    return errD_fake
+#     errD_fake.backward()
+#     D_G_z1 = output.mean().item()
+#     # Add the gradients from the all-real and all-fake batches
+#     errD = errD_real + errD_fake
+#     # Update D
+#     optimizerD.step()
+    
+    
+    # Output training stats
+#     if i % 50 == 0:
+#         print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
+#               % (epoch, num_epochs, i, len(dataloader),
+#                  errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
+
+    # Save Losses for plotting later
+    G_losses.append(errG.item())
+    D_losses.append(errD.item())
+
+    # Check how the generator is doing by saving G's output on fixed_noise
+#     if (iters % 500 == 0) or ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
+#         with torch.no_grad():
+#             fake = netG(fixed_noise).detach().cpu()
+#         img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
+
+#     iters += 1
+    
     
 def LogRatioLoss(input, value):
     m = input.size()[0]-1   # #paired
@@ -366,6 +480,7 @@ def LogRatioLoss(input, value):
 # Train Utils
 iters = 0
 if args.embedding:
+    from tensorboardX import SummaryWriter
     writer = SummaryWriter(comment='embedding_training')
 
 #
@@ -443,10 +558,50 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             module_loss = criterion(dim_10, labels)
             loss5 =  torch.sum(module_loss) / module_loss.size(0)
             loss += args.lamb5 * loss5
-        
+        if args.lamb6 != 0:
+            with torch.enable_grad():
+                reg = 1e-6
+                l1_loss = 0. #torch.zeros(1)
+                for name, param in models['backbone'].named_parameters():
+                    if 'bias' not in name:
+                        l1_loss = l1_loss + (reg * torch.sum(torch.pow(param, 2)))
+                for name, param in models['module'].named_parameters():
+                    if 'bias' not in name:
+                        l1_loss = l1_loss + (reg * torch.sum(torch.pow(param, 2)))
+#             print(l1_loss.shape)
+            loss += args.lamb6 * l1_loss
+        if args.lamb7 != 0:
+            #nets
+            netG = Generator().to('cuda')
+            netG.apply(weights_init)
+            
+            noise = torch.randn(embed.size(0), 100, 1, 1, device='cuda')
+            
+            fake = netG(noise)
+#             _, features2_, features_ = models['backbone'](fake)
+#             _, _, fake_em = models['module'](features_)
+            loss += args.lamb7 * GAN(inputs, fake, netG, models['backbone'])
+
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
+        
+        if args.lamb7 != 0:
+            ############################
+            # (2) Update G network: maximize log(D(G(z)))
+            ###########################
+            optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(beta1, 0.999))
+            criterion_GAN = nn.BCELoss()
+            b_size = fake.size(0)
+            netG.zero_grad()
+            label = torch.full((b_size,), 1, device='cuda')
+            output = models['module'](models['backbone'](fake)[-1])[0]
+            output = torch.sigmoid(output).view(-1)
+            errG = criterion_GAN(output, label)
+            errG.backward()
+            D_G_z2 = output.mean().item()
+            optimizerG.step()
+    
         if args.embedding and (iters % 200 == 0):
             writer = tsne(writer, embed, labels, iters)#, image=inputs)
         
@@ -762,7 +917,8 @@ if __name__ == '__main__':
 #                     'state_dict_module': models['module'].state_dict()
 #                 },
 #                 './cifar10/train/weights/active_resnet18_cifar10_trial{}.pth'.format(trial))
-        os.remove(timestr+ '.pth')
+        if args.everyinit:
+            os.remove(timestr+ '.pth')
     timestr = "./results/"+args.data + time.strftime("%Y%m%d-%H%M%S")
     with open(timestr + 'output.txt','w') as f:
         f.write(str(collect_acc))
