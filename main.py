@@ -703,7 +703,7 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
             
             if args.rule == "Random":
                 return torch.rand([args.subset])
-            elif args.rule == "PredictedLoss":
+            elif args.rule in [ "PredictedLoss", "Discriminator"]:
                 uncertainty = torch.cat((uncertainty, pred_loss), 0)
             elif args.rule == "lrl":
                 for i in range(len(features2)):
