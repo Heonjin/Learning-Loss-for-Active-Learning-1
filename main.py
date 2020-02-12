@@ -30,7 +30,6 @@ import visdom
 from tqdm import tqdm
 import argparse
 from utils import L2dist, tsne
-from tensorboardX import SummaryWriter
 import time
 
 # Custom
