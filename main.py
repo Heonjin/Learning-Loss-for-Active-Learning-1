@@ -59,9 +59,11 @@ parser.add_argument('--lamb3', type=float, default = 0)
 parser.add_argument('--lamb5', type=float, default = 0)
 parser.add_argument('--lamb6', type=float, default = 0)
 parser.add_argument('--lamb7', type=float, default = 0)
+parser.add_argument('--lamb8', type=float, default = 0)
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
+parser.add_argument('--savegan', action='store_true', default = False)
 parser.add_argument('--printdata', action='store_true', default = False)
 parser.add_argument('--nolog', action='store_true', default = False)
 
@@ -124,8 +126,9 @@ train_transform = T.Compose([
 ])
 
 test_transform = T.Compose([
+    T.Resize(32),
     T.ToTensor(),
-    Nor
+    Nor,
 ])
 if args.data == "CIFAR10":
     cifar10_train = CIFAR10('./cifar10', train=True, download=True, transform=train_transform)
@@ -149,9 +152,9 @@ elif args.data == "FashionMNIST":
     cifar10_test  = FashionMNIST('./FashionMNIST', train=False, download=True, transform=test_transform)
 elif args.data == "STL10":
     train_transform = T.Compose([
-        T.Pad(4),
-        T.RandomCrop(size=96),
-#         T.RandomCrop(size=32),
+#         T.Pad(4),
+#         T.RandomCrop(size=96),
+        T.RandomCrop(size=32),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         Nor
@@ -160,7 +163,7 @@ elif args.data == "STL10":
     cifar10_unlabeled = STL10('./stl10-data', split='train', download=True, transform=test_transform)
     cifar10_test  = STL10('./stl10-data', split='test', download=True, transform=test_transform)
     NUM_TRAIN = len(cifar10_train)
-    SUBSET = 1000
+    SUBSET = 3000
 
 transform = T.Compose(
     [T.ToTensor(),
@@ -301,6 +304,37 @@ def LiftedStructureLoss(inputs, targets, off=0.2, alpha=1, beta=2, margin=0.5, h
     mean_pos_sim = torch.mean(pos_pair_).item()
     return loss, prec, mean_pos_sim, mean_neg_sim
 
+class ConGenerator(nn.Module):
+    def __init__(self, num_classes = 10):
+        super(ConGenerator, self).__init__()
+
+        self.label_emb = nn.Embedding(num_classes, num_classes)
+
+        def block(in_feat, out_feat, normalize=True):
+            layers = [nn.Linear(in_feat, out_feat)]
+            if normalize:
+                layers.append(nn.BatchNorm1d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
+
+        self.model = nn.Sequential(
+            *block(nz + num_classes, 128, normalize=False),
+            *block(128, 256),
+            *block(256, 512),
+            *block(512, 1024),
+            nn.Linear(1024, 3*32*32),
+            nn.Tanh()
+        )
+
+    def forward(self, noise, labels):
+        # Concatenate label embedding and image to produce input
+        gen_input = torch.cat((self.label_emb(labels), noise.view(noise.size(0),100)), -1)
+        gen_input.view(-1,110,1,1)
+        img = self.model(gen_input)
+        img = img.view(img.size(0), 3, 32,32)
+        return img
+
+
 class Generator(nn.Module):
     def __init__(self):#, ngpu):
         super(Generator, self).__init__()
@@ -343,6 +377,8 @@ ndf = 64
 # Beta1 hyperparam for Adam optimizers
 beta1 = 0.5
 
+kk= 0
+
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -351,17 +387,16 @@ def weights_init(m):
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
 
-def GAN(real_img, fake, netG, netD):
+def GAN(real_img, fake, models, optimizers, labels = None):
+    global kk
     criterion = nn.BCELoss()
 
     # Create batch of latent vectors that we will use to visualize
     #  the progression of the generator
     fixed_noise = torch.randn(real_img.size(0), real_img.size(1), device='cuda')
     # Setup Adam optimizers for both G and D
-    optimizerD = optim.Adam(netD.parameters(), lr=0.0002, betas=(beta1, 0.999))
+    netD = models['backbone']
     img_list = []
-    G_losses = []
-    D_losses = []
 #     iters = 0
 #     scores, features2, features = models['backbone'](inputs)
 #     print("Starting Training Loop...")
@@ -372,7 +407,7 @@ def GAN(real_img, fake, netG, netD):
     # Format batch
     b_size = real_img.size(0)
     label = torch.full((b_size,), 1, device='cuda')
-    output = models['module'](netD(real_img)[-1])[0]
+    output = models['module'](netD(real_img)[-1], labels)[0]
     output = torch.sigmoid(output).view(-1)
     errD_real = criterion(output, label)
     errD_real.backward()
@@ -382,17 +417,16 @@ def GAN(real_img, fake, netG, netD):
     # Generate batch of latent vectors
     noise = torch.randn(b_size, nz, 1, 1, device='cuda')
     label.fill_(0)
-    output = models['module'](netD(fake.detach())[-1])[0]
+    output = models['module'](netD(fake.detach())[-1], labels)[0]
     output = torch.sigmoid(output).view(-1)
     errD_fake = criterion(output, label)
-    return errD_fake
-#     errD_fake.backward()
+    errD_fake.backward()
 #     D_G_z1 = output.mean().item()
 #     # Add the gradients from the all-real and all-fake batches
 #     errD = errD_real + errD_fake
 #     # Update D
 #     optimizerD.step()
-    
+      
     
     # Output training stats
 #     if i % 50 == 0:
@@ -400,17 +434,33 @@ def GAN(real_img, fake, netG, netD):
 #               % (epoch, num_epochs, i, len(dataloader),
 #                  errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
 
-    # Save Losses for plotting later
-    G_losses.append(errG.item())
-    D_losses.append(errD.item())
 
-    # Check how the generator is doing by saving G's output on fixed_noise
-#     if (iters % 500 == 0) or ((epoch == num_epochs-1) and (i == len(dataloader)-1)):
-#         with torch.no_grad():
-#             fake = netG(fixed_noise).detach().cpu()
+#     Check how the generator is doing by saving G's output on fixed_noise
+    if args.savegan and kk == 0:
+        global fixed_noisee, fixed_label, animation, HTML
+        fixed_noisee = torch.randn(128, 100, 1, 1, device='cuda')
+        fixed_label = torch.LongTensor(128).random_(0, 10).to('cuda')
+        import matplotlib.animation as animation
+        from IPython.display import HTML
+    if args.savegan and (kk % 100 == 0):
+        timest = "./imgs/" + args.data +'_'+ time.strftime("%m%d-%H%M%S")
+        import matplotlib.pyplot as plt
+        import torchvision.utils as vutils
+        import torchvision
+        from PIL import Image
+        with torch.no_grad():
+            if args.lamb7 != 0:
+                fake = models['netG'](fixed_noisee).detach().cpu()
+            elif args.lamb8 != 0:
+                fake = models['netG'](fixed_noisee, fixed_label).detach().cpu()
 #         img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
+#         fig = plt.figure(figsize=(8,16))        
+        grid_img = torchvision.utils.make_grid(fake, nrow=16)
+        plt.imshow(grid_img.permute(1, 2, 0))
+        plt.savefig(timest+'.jpg')
 
-#     iters += 1
+    kk += 1
+    return errD_real + errD_fake 
     
     
 def LogRatioLoss(input, value):
@@ -511,7 +561,10 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             features[1] = features[1].detach()
             features[2] = features[2].detach()
             features[3] = features[3].detach()
-        pred_loss, dim_10, embed = models['module'](features)
+        if args.lamb8 != 0:
+            pred_loss, dim_10, embed = models['module'](features, labels)
+        else:
+            pred_loss, dim_10, embed = models['module'](features)
         pred_loss = pred_loss.view(pred_loss.size(0))
         
         m_backbone_loss = torch.sum(target_loss) / target_loss.size(0)
@@ -569,38 +622,41 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
                         l1_loss = l1_loss + (reg * torch.sum(torch.pow(param, 2)))
 #             print(l1_loss.shape)
             loss += args.lamb6 * l1_loss
-        if args.lamb7 != 0:
-            #nets
-            if cycle == 0:
-                netG = Generator().to('cuda')
-                netG.apply(weights_init)
-            
+        if args.lamb7 != 0 or args.lamb8 != 0:
             noise = torch.randn(embed.size(0), 100, 1, 1, device='cuda')
-            
-            fake = netG(noise)
-#             _, features2_, features_ = models['backbone'](fake)
-#             _, _, fake_em = models['module'](features_)
-            loss += args.lamb7 * GAN(inputs, fake, netG, models['backbone'])
+            if args.lamb7 != 0:
+                fake = models['netG'](noise)
+                errD = GAN(inputs, fake, models, optimizers)
+            elif args.lamb8 != 0:
+                fake = models['netG'](noise, labels)
+                errD = GAN(inputs, fake, models, optimizers, labels = labels)
+#             loss += args.lamb7 * errD
+#             print('errD',errD.item())
 
         loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
+        if args.lamb7 and args.lamb8:
+            optimizers['D'].step()
         
-        if args.lamb7 != 0:
+        if args.lamb7 != 0 or args.lamb8 != 0:
             ############################
             # (2) Update G network: maximize log(D(G(z)))
             ###########################
-            optimizerG = optim.Adam(netG.parameters(), lr=0.0002, betas=(beta1, 0.999))
             criterion_GAN = nn.BCELoss()
             b_size = fake.size(0)
             netG.zero_grad()
             label = torch.full((b_size,), 1, device='cuda')
-            output = models['module'](models['backbone'](fake)[-1])[0]
+            if args.lamb7 != 0:
+                output = models['module'](models['backbone'](fake)[-1])[0]
+            elif args.lamb8 != 0:
+                output = models['module'](models['backbone'](fake)[-1],labels)[0]
             output = torch.sigmoid(output).view(-1)
             errG = criterion_GAN(output, label)
+#             print('errG',errG.item())
             errG.backward()
             D_G_z2 = output.mean().item()
-            optimizerG.step()
+            optimizers['G'].step()
     
         if args.embedding and (iters % 200 == 0):
             writer = tsne(writer, embed, labels, iters)#, image=inputs)
@@ -701,7 +757,7 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
             pred_loss = pred_loss.view(pred_loss.size(0))
             
             if args.rule == "Random":
-                return torch.rand([args.subset])
+                return torch.rand([SUBSET])
             elif args.rule in [ "PredictedLoss", "Discriminator"]:
                 uncertainty = torch.cat((uncertainty, pred_loss), 0)
             elif args.rule == "lrl":
@@ -760,18 +816,32 @@ if __name__ == '__main__':
         
         # Model
         if args.data == "CIFAR100":
-            resnet18    = resnet.ResNet18(num_classes=100).cuda()
+            num_classes=100; in_channel=3
         elif args.data in ["CIFAR10","SVHN","STL10"]:
-            resnet18    = resnet.ResNet18(num_classes=10).cuda()
+            num_classes=10; in_channel=3
         else:
-            resnet18    = resnet.ResNet18(num_classes=10,in_channel=1).cuda()
+            num_classes=10; in_channel=1
+        resnet18    = resnet.ResNet18(num_classes= num_classes, in_channel=in_channel).cuda()
+        if args.lamb8 != 0:
+            loss_module = lossnet.LossNet(num_classes=num_classes).cuda()
+        else:
+            loss_module = lossnet.LossNet().cuda()
+
         if args.everyinit:
             timestr = "./initials/" + args.data +'_'+ time.strftime("%m%d-%H%M%S")
             torch.save(resnet18.state_dict(), timestr + '.pth')
-        loss_module = lossnet.LossNet().cuda()
-        models      = {'backbone': resnet18, 'module': loss_module}
+        if args.lamb7 != 0:
+            netG = Generator().to('cuda')
+            netG.apply(weights_init)
+            models      = {'backbone': resnet18, 'module': loss_module, 'netG': netG}
+        elif args.lamb8 != 0 :
+            netG = ConGenerator(num_classes=num_classes).to('cuda')
+            netG.apply(weights_init)
+            models      = {'backbone': resnet18, 'module': loss_module, 'netG': netG}
+        else:
+            models      = {'backbone': resnet18, 'module': loss_module}
         torch.backends.cudnn.benchmark = True
-        
+
         # Active learning cycles
         for cycle in range(CYCLES):
             if args.everyinit:
@@ -783,10 +853,16 @@ if __name__ == '__main__':
                                     momentum=MOMENTUM, weight_decay=WDECAY)
             optim_module   = optim.SGD(models['module'].parameters(), lr=LR, 
                                     momentum=MOMENTUM, weight_decay=WDECAY)
+            if args.lamb7 or args.lamb8:
+                optimizerG = optim.Adam(netG.parameters(), lr=0.0002, betas=(beta1, 0.999))
+                optimizerD = optim.Adam(models['backbone'].parameters(), lr=0.0002, betas=(beta1, 0.999))
             sched_backbone = lr_scheduler.MultiStepLR(optim_backbone, milestones=MILESTONES)
             sched_module   = lr_scheduler.MultiStepLR(optim_module, milestones=MILESTONES)
 
-            optimizers = {'backbone': optim_backbone, 'module': optim_module}
+            if args.lamb7 or args.lamb8:
+                optimizers = {'backbone': optim_backbone, 'module': optim_module, 'G': optimizerG, 'D':optimizerD}
+            else:
+                optimizers = {'backbone': optim_backbone, 'module': optim_module}
             schedulers = {'backbone': sched_backbone, 'module': sched_module}
             
             if args.Lliftedstructured:
@@ -829,6 +905,7 @@ if __name__ == '__main__':
                 log_probs = torch.log(probs)
                 U = (probs*log_probs).sum(1)
                 init = labeled_set[:]
+                
                 added_set = list(torch.tensor(subset)[U.sort()[1][:ADDENDUM]].numpy())
                 labeled_set += list(torch.tensor(subset)[U.sort()[1][:ADDENDUM]].numpy())
                 unlabeled_set = list(torch.tensor(subset)[U.sort()[1][ADDENDUM:]].numpy()) + unlabeled_set[SUBSET:]

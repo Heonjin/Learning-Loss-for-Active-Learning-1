@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 
 class LossNet(nn.Module):
-    def __init__(self, feature_sizes=[32, 16, 8, 4], num_channels=[64, 128, 256, 512], interm_dim=128):
+    def __init__(self, feature_sizes=[32, 16, 8, 4], num_channels=[64, 128, 256, 512], interm_dim=128, num_classes=0):
         super(LossNet, self).__init__()
         
         self.GAP1 = nn.AvgPool2d(feature_sizes[0])
@@ -22,13 +22,18 @@ class LossNet(nn.Module):
         self.FC3 = nn.Linear(num_channels[2], interm_dim)
         self.FC4 = nn.Linear(num_channels[3], interm_dim)
 
-        self.linear = nn.Linear(4 * interm_dim, 1)
-        self.linear2 = nn.Linear(4 * interm_dim, 10)
+        self.linear = nn.Linear(4 * interm_dim + num_classes, 16)
+        self.linear2 = nn.Linear(16, 1)
+        self.linearc = nn.Linear(4 * interm_dim, 10)
         
         self.is_norm = False
         self.lfc = False
+        
+        self.LReLU = nn.LeakyReLU(0.2)#, inplace=True)
+        if num_classes != 0:
+            self.label_emb = nn.Embedding(num_classes, num_classes)
     
-    def forward(self, features):
+    def forward(self, features, labels = None):
         out1 = self.GAP1(features[0])
         out1 = out1.view(out1.size(0), -1)
         out1 = F.relu(self.FC1(out1))
@@ -46,12 +51,14 @@ class LossNet(nn.Module):
         out4 = F.relu(self.FC4(out4))
 
         out = torch.cat((out1, out2, out3, out4), 1)
+        if labels is not None:
+            out = torch.cat((self.label_emb(labels), out), -1)
         features=dim_10=out
         if self.is_norm:
             dim_512 = self.l2_norm(out)
         if self.lfc:
-            dim_10 = self.linear2(out)
-        out = self.linear(out)
+            dim_10 = self.linearc(out)
+        out = self.linear2(self.LReLU(self.linear(out)))
         
         return out, dim_10, dim_512
     

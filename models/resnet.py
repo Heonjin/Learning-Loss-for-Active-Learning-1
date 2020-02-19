@@ -91,6 +91,8 @@ class ResNet(nn.Module):
         out3 = self.layer3(out2)
         out4 = self.layer4(out3)
         out = F.avg_pool2d(out4, 4)
+#         pool = nn.AdaptiveAvgPool2d((1,1))
+#         out = pool(out4)
         out = out.view(out.size(0), -1)
         features=out
         if self.is_norm:
