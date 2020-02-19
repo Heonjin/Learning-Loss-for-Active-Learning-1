@@ -22,7 +22,7 @@ from torch.autograd import Variable
 # Torchvison
 import torchvision.transforms as T
 import torchvision.models as models
-from torchvision.datasets import CIFAR100, CIFAR10,MNIST,FashionMNIST,SVHN,STL10
+from torchvision.datasets import CIFAR100, CIFAR10,MNIST,FashionMNIST,SVHN,STL10,ImageFolder
 
 # Utils
 import numpy
@@ -118,6 +118,8 @@ elif args.data == "FashionMNIST":
     Nor = T.Normalize((0.1307,), (0.3081,))
 elif args.data == "STL10":
     Nor = T.Normalize((.5, .5, .5), (.5, .5, .5))
+elif args.data == "IMAGENET":
+    Nor = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 train_transform = T.Compose([
     T.RandomHorizontalFlip(),
     T.RandomCrop(size=32, padding=4),
@@ -159,11 +161,38 @@ elif args.data == "STL10":
         T.ToTensor(),
         Nor
         ])
+    test_transform = T.Compose([
+        T.Resize(40),
+        T.CenterCrop(size=32),
+        T.ToTensor(),
+        Nor,
+    ])
+
     cifar10_train = STL10('./stl10-data', split='train', download=True, transform=train_transform)
     cifar10_unlabeled = STL10('./stl10-data', split='train', download=True, transform=test_transform)
     cifar10_test  = STL10('./stl10-data', split='test', download=True, transform=test_transform)
     NUM_TRAIN = len(cifar10_train)
     SUBSET = 3000
+elif args.data == "IMAGENET":
+    train_transform = T.Compose([
+#         T.Pad(4),
+#         T.RandomCrop(size=96),
+        T.RandomCrop(size=32),
+        T.RandomHorizontalFlip(),
+        T.ToTensor(),
+        Nor
+        ])
+    test_transform = T.Compose([
+        T.Resize(40),
+        T.CenterCrop(size=32),
+        T.ToTensor(),
+        Nor,
+    ])
+
+    cifar10_train = ImageFolder('./ImageNet', transform=train_transform)
+    cifar10_unlabeled = ImageFolder('./ImageNet', transform=test_transform)
+    cifar10_test  = ImageFolder('./ImageNet', transform=test_transform)
+    NUM_TRAIN = len(cifar10_train)
 
 transform = T.Compose(
     [T.ToTensor(),
@@ -819,6 +848,8 @@ if __name__ == '__main__':
             num_classes=100; in_channel=3
         elif args.data in ["CIFAR10","SVHN","STL10"]:
             num_classes=10; in_channel=3
+        elif args.data == "IMAGENET":
+            num_classes=1000; in_channel=3
         else:
             num_classes=10; in_channel=1
         resnet18    = resnet.ResNet18(num_classes= num_classes, in_channel=in_channel).cuda()
