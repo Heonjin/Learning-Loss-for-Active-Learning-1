@@ -189,9 +189,9 @@ elif args.data == "IMAGENET":
         Nor,
     ])
 
-    cifar10_train = ImageFolder('./ImageNet', transform=train_transform)
-    cifar10_unlabeled = ImageFolder('./ImageNet', transform=test_transform)
-    cifar10_test  = ImageFolder('./ImageNet', transform=test_transform)
+    cifar10_train = ImageFolder('/nas/Public/imagenet/train', transform=train_transform)
+    cifar10_unlabeled = ImageFolder('/nas/Public/imagenet/train', transform=test_transform)
+    cifar10_test  = ImageFolder('/nas/Public/imagenet/val/ILSVRC2012-val', transform=test_transform)
     NUM_TRAIN = len(cifar10_train)
 
 transform = T.Compose(
