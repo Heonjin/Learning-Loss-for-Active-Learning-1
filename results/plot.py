@@ -12,7 +12,7 @@ files=args.files
 
 
 #files = ['MNIST_LL_Entropy_100.txt','MNIST_lrl_Entropy_100.txt']
-make = makecolor()
+make,*names = makecolor(),
 for file in files:
     f=open(file,"r")
     # print(f.read())
@@ -101,8 +101,9 @@ for file in files:
         name+='_lrlbatch'+str(info['lrlbatch'])
     print(name+' = np.array('+num+')')
     print('plt.plot(axis1000[:10],np.mean('+name+',axis=0)[:10],'+'"'+next(make)+'"'+', label = "'+name+'")')#,sep='')
+    names+=name,
 
-
+print(names)
 # import matplotlib.pyplot as plt
 # plt.plot(x_axis,collect['R3D.txt']['train']['loss'],'b',legend='R3D train loss')
 # plt.show()
