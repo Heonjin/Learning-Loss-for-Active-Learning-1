@@ -22,7 +22,7 @@ from torch.autograd import Variable
 # Torchvison
 import torchvision.transforms as T
 import torchvision.models as models
-from torchvision.datasets import CIFAR100, CIFAR10,MNIST,FashionMNIST,SVHN,STL10,ImageFolder
+from torchvision.datasets import CIFAR100, CIFAR10,MNIST,FashionMNIST,SVHN,STL10,ImageFolder,LSUN
 
 # Utils
 import numpy
@@ -120,6 +120,8 @@ elif args.data == "STL10":
     Nor = T.Normalize((.5, .5, .5), (.5, .5, .5))
 elif args.data == "IMAGENET":
     Nor = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+elif args.data == "LSUN":
+    Nor = T.Normalize((.5, .5, .5), (.5, .5, .5))
 train_transform = T.Compose([
     T.RandomHorizontalFlip(),
     T.RandomCrop(size=32, padding=4),
@@ -152,6 +154,12 @@ elif args.data == "FashionMNIST":
     cifar10_train = FashionMNIST('./FashionMNIST', train=True, download=True, transform=train_transform)
     cifar10_unlabeled   = FashionMNIST('./FashionMNIST', train=True, download=True, transform=test_transform)
     cifar10_test  = FashionMNIST('./FashionMNIST', train=False, download=True, transform=test_transform)
+elif args.data == "LSUN":
+    classes = ['bedroom', 'bridge', 'church_outdoor', 'classroom', 'conference_room', 'dining_room', 'kitchen', 'living_room', 'restaurant', 'tower']
+    classes = [ c + '_train_lmdb' for c in classes]
+    cifar10_train = LSUN('./lsun', classes=['bedroom_train'], transform=train_transform)
+    cifar10_unlabeled   = LSUN('./lsun', classes=classes, transform=test_transform)
+    cifar10_test  = LSUN('./lsun', classes=['test'], transform=test_transform)
 elif args.data == "STL10":
     train_transform = T.Compose([
 #         T.Pad(4),
