@@ -45,6 +45,7 @@ parser.add_argument('--epoch', type=int, default = 200)
 parser.add_argument('--cycles', type=int, default = 10)
 parser.add_argument('--subset', type=int, default = 10000)
 parser.add_argument('--rule', type=str, default = "Random")
+parser.add_argument('--model', type=str, default = "resnet18")
 parser.add_argument('--trials', type=int, default = TRIALS)
 parser.add_argument('--embedding', action='store_true', default = False)
 parser.add_argument('--everyinit', action='store_true', default = False)
@@ -860,7 +861,12 @@ if __name__ == '__main__':
             num_classes=1000; in_channel=3
         else:
             num_classes=10; in_channel=1
-        resnet18    = resnet.ResNet18(num_classes= num_classes, in_channel=in_channel).cuda()
+        if args.model == 'resnet18':
+            resnet18    = resnet.ResNet18(num_classes= num_classes, in_channel=in_channel).cuda()
+        elif args.model == 'resnet34':
+            resnet18    = resnet.ResNet34(num_classes= num_classes, in_channel=in_channel).cuda()
+        else:
+            assert False, "model is wronggggg" 
         if args.lamb8 != 0:
             loss_module = lossnet.LossNet(num_classes=num_classes).cuda()
         else:
