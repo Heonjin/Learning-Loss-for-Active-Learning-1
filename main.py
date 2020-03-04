@@ -42,8 +42,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--lrl', action='store_true', default = False)  # AL pool
 parser.add_argument('--query', type=int, default = 1000)
 parser.add_argument('--epoch', type=int, default = 200)
+parser.add_argument('--batch', type=int, default = 128)
 parser.add_argument('--cycles', type=int, default = 10)
 parser.add_argument('--subset', type=int, default = 10000)
+parser.add_argument('--interm_dim', type=int, default = 128)
 parser.add_argument('--rule', type=str, default = "Random")
 parser.add_argument('--model', type=str, default = "resnet18")
 parser.add_argument('--trials', type=int, default = TRIALS)
@@ -61,6 +63,7 @@ parser.add_argument('--lamb5', type=float, default = 0)
 parser.add_argument('--lamb6', type=float, default = 0)
 parser.add_argument('--lamb7', type=float, default = 0)
 parser.add_argument('--lamb8', type=float, default = 0)
+parser.add_argument('--lamb9', type=float, default = 0)
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
@@ -102,6 +105,7 @@ CYCLES = args.cycles
 SUBSET = args.subset
 TRIALS = args.trials
 WEIGHT = args.lamb1
+BATCH = args.batch
 softmax = nn.Softmax(dim=1)
 print(args)
 assert not args.triplet or not args.liftedstructured, "Don't use both Triplet and SiftedStructured Losses together"
@@ -534,7 +538,7 @@ def LogRatioLoss(input, value):
         diff = torch.abs(value[0] - value[1:])
         out = torch.pow(diff, 2)
         gt_dist = torch.pow(out + eps, 1. / 2).sum(dim=1)
-
+        
         # auxiliary variables
         idxs = torch.arange(1, m+1).cuda()
         indc = idxs.repeat(m,1).t() < idxs.repeat(m,1)
@@ -558,7 +562,6 @@ def LogRatioLoss(input, value):
         log_ratio_loss = (diff_log_dist-diff_log_gt_dist).abs()
     else:
         log_ratio_loss = (diff_log_dist-diff_log_gt_dist).pow(2)
-
     loss = log_ratio_loss
     loss = loss.mul(wgt).sum()
     return loss
@@ -599,6 +602,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             features[1] = features[1].detach()
             features[2] = features[2].detach()
             features[3] = features[3].detach()
+            features2 = features2.detach()
         if args.lamb8 != 0:
             pred_loss, dim_10, embed = models['module'](features, labels)
         else:
@@ -607,10 +611,11 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         
         m_backbone_loss = torch.sum(target_loss) / target_loss.size(0)
         loss            = m_backbone_loss
-        m_module_loss   = LossPredLoss(pred_loss, target_loss, margin=MARGIN)
+        m_backbone_loss = m_backbone_loss.item()
         #
         if args.lamb1 != 0:
-            loss += args.lamb1 * m_module_loss
+            loss1   = LossPredLoss(pred_loss, target_loss, margin=MARGIN)
+            loss += args.lamb1 * loss1
         ##
         if args.lamb2 != 0:
             if args.softmax:
@@ -700,11 +705,17 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             writer = tsne(writer, embed, labels, iters)#, image=inputs)
         
         # Visualize
+        M_module_loss = 0
+        for i in range(1,8):
+            try:
+                M_module_loss += eval('loss{}'.format(i))
+            except:
+                pass
         if (iters % 100 == 0) and (vis != None) and (plot_data != None):
             plot_data['X'].append(iters)
             plot_data['Y'].append([
-                m_backbone_loss.item(),
-                m_module_loss.item(),
+                m_backbone_loss,
+                M_module_loss.item(),
                 loss.item()
             ])
             vis.line(
@@ -868,7 +879,7 @@ if __name__ == '__main__':
         else:
             assert False, "model is wronggggg" 
         if args.lamb8 != 0:
-            loss_module = lossnet.LossNet(num_classes=num_classes).cuda()
+            loss_module = lossnet.LossNet(num_classes=num_classes,interm_dim=args.interm_dim).cuda()
         else:
             loss_module = lossnet.LossNet().cuda()
 
@@ -1039,8 +1050,21 @@ if __name__ == '__main__':
 #                     'state_dict_module': models['module'].state_dict()
 #                 },
 #                 './cifar10/train/weights/active_resnet18_cifar10_trial{}.pth'.format(trial))
+
+                ######### save model
+#             if cycle == CYCLES-1:
+#                 acc = test(models, dataloaders, 'test')
+#                 torch.save({
+#                     'epoch': args.epoch,
+#                     'acc' : acc,
+#                     'state_dict_backbone': models['backbone'].state_dict(),
+#                     'state_dict_module': models['module'].state_dict()
+#                 },
+#                 './temp'+args.data+'_'+str(trial)+'.pth' )
         if args.everyinit:
             os.remove(timestr+ '.pth')
+        
+        
     timestr = "./results/"+args.data + time.strftime("%Y%m%d-%H%M%S")
     with open(timestr + 'output.txt','w') as f:
         f.write(str(collect_acc))
