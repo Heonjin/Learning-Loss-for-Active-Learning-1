@@ -91,7 +91,7 @@ args.embed2embed = True
 args.is_norm = True
 args.no_square = False
 pdist = L2dist(2)
-if args.rule in ["Entropy", "Margin"]:
+if args.rule in ["Entropy", "Margin"] or args.lamb1 == 0:
     args.subset = 39000
 if args.seed == True:
     args.trials = 1
@@ -708,14 +708,14 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         M_module_loss = 0
         for i in range(1,8):
             try:
-                M_module_loss += eval('loss{}'.format(i))
+                M_module_loss += eval('loss{}.item()'.format(i))
             except:
                 pass
         if (iters % 100 == 0) and (vis != None) and (plot_data != None):
             plot_data['X'].append(iters)
             plot_data['Y'].append([
                 m_backbone_loss,
-                M_module_loss.item(),
+                M_module_loss,
                 loss.item()
             ])
             vis.line(
@@ -806,7 +806,7 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
             pred_loss = pred_loss.view(pred_loss.size(0))
             
             if args.rule == "Random":
-                return torch.rand([SUBSET])
+                return torch.rand(SUBSET)
             elif args.rule in [ "PredictedLoss", "Discriminator"]:
                 uncertainty = torch.cat((uncertainty, pred_loss), 0)
             elif args.rule == "lrl":
@@ -945,14 +945,10 @@ if __name__ == '__main__':
             # Randomly sample 10000 unlabeled data points
             random.shuffle(unlabeled_set)
             subset = unlabeled_set[:SUBSET]
-            labeledsubset = unlabeled_set[SUBSET:]
-
+            
             # Create unlabeled dataloader for the unlabeled subset
             unlabeled_loader = DataLoader(cifar10_unlabeled, batch_size=BATCH, 
                                           sampler=SubsetSequentialSampler(subset), # more convenient if we maintain the order of subset
-                                          pin_memory=True)
-            labeled_loader = DataLoader(cifar10_unlabeled, batch_size=args.lrlbatch, 
-                                          sampler=SubsetSequentialSampler(labeledsubset),
                                           pin_memory=True)
 
 
@@ -976,7 +972,7 @@ if __name__ == '__main__':
             else:
                 # Measure uncertainty of each data points in the subset
                 if args.rule == 'lrl':
-                    uncertainty = get_uncertainty(models, unlabeled_loader, labeled_loader)
+                    uncertainty = get_uncertainty(models, unlabeled_loader, dataloaders['train'])
                 else:
                     uncertainty = get_uncertainty(models, unlabeled_loader)
 
