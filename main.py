@@ -603,6 +603,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             features[2] = features[2].detach()
             features[3] = features[3].detach()
             features2 = features2.detach()
+            scores = scores.detach()
         if args.lamb8 != 0:
             pred_loss, dim_10, embed = models['module'](features, labels)
         else:
@@ -805,9 +806,7 @@ def get_uncertainty(models, unlabeled_loader,labeled_loader=None):
             pred_loss, dim_10, embed = models['module'](features) # pred_loss = criterion(scores, labels) # ground truth loss
             pred_loss = pred_loss.view(pred_loss.size(0))
             
-            if args.rule == "Random":
-                return torch.rand(SUBSET)
-            elif args.rule in [ "PredictedLoss", "Discriminator"]:
+            if args.rule in [ "PredictedLoss", "Discriminator"]:
                 uncertainty = torch.cat((uncertainty, pred_loss), 0)
             elif args.rule == "lrl":
                 for i in range(len(features2)):
@@ -860,7 +859,7 @@ if __name__ == '__main__':
         train_loader = DataLoader(cifar10_train, batch_size=BATCH, 
                                   sampler=SubsetRandomSampler(labeled_set), 
                                   pin_memory=True)
-        test_loader  = DataLoader(cifar10_test, batch_size=BATCH)
+        test_loader  = DataLoader(cifar10_test, batch_size=BATCH)#######
         dataloaders  = {'train': train_loader, 'test': test_loader}
         
         # Model
@@ -944,7 +943,11 @@ if __name__ == '__main__':
 
             # Randomly sample 10000 unlabeled data points
             random.shuffle(unlabeled_set)
-            subset = unlabeled_set[:SUBSET]
+            if args.lamb1 !=0:
+                subset = unlabeled_set[:SUBSET]
+            else:
+                subset = unlabeled_set
+            print(len(subset))
             
             # Create unlabeled dataloader for the unlabeled subset
             unlabeled_loader = DataLoader(cifar10_unlabeled, batch_size=BATCH, 
@@ -973,6 +976,8 @@ if __name__ == '__main__':
                 # Measure uncertainty of each data points in the subset
                 if args.rule == 'lrl':
                     uncertainty = get_uncertainty(models, unlabeled_loader, dataloaders['train'])
+                elif args.rule == 'Random':
+                    uncertainty = torch.rand(len(subset))
                 else:
                     uncertainty = get_uncertainty(models, unlabeled_loader)
 
@@ -984,7 +989,10 @@ if __name__ == '__main__':
                 
                 added_set = list(torch.tensor(subset)[arg][-ADDENDUM:].numpy())
                 labeled_set += list(torch.tensor(subset)[arg][-ADDENDUM:].numpy())
-                unlabeled_set = list(torch.tensor(subset)[arg][:-ADDENDUM].numpy()) + unlabeled_set[SUBSET:]
+                if args.lamb1 !=0:
+                    unlabeled_set = list(torch.tensor(subset)[arg][:-ADDENDUM].numpy()) + unlabeled_set[SUBSET:]
+                else:
+                    unlabeled_set = list(torch.tensor(subset)[arg][:-ADDENDUM].numpy())
             
             # Create a new dataloader for the updated labeled dataset
             dataloaders['train'] = DataLoader(cifar10_train, batch_size=BATCH, 
