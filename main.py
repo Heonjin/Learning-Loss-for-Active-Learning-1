@@ -602,8 +602,9 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             features[1] = features[1].detach()
             features[2] = features[2].detach()
             features[3] = features[3].detach()
-            features2 = features2.detach()
-            scores = scores.detach()
+        features2 = features2.detach()
+        scores = scores.detach()
+        
         if args.lamb8 != 0:
             pred_loss, dim_10, embed = models['module'](features, labels)
         else:
