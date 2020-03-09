@@ -948,7 +948,6 @@ if __name__ == '__main__':
                 subset = unlabeled_set[:SUBSET]
             else:
                 subset = unlabeled_set
-            print(len(subset))
             
             # Create unlabeled dataloader for the unlabeled subset
             unlabeled_loader = DataLoader(cifar10_unlabeled, batch_size=BATCH, 
