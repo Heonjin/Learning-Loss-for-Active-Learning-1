@@ -91,7 +91,7 @@ args.embed2embed = True
 args.is_norm = True
 args.no_square = False
 pdist = L2dist(2)
-if args.rule in ["Entropy", "Margin"] or args.lamb1 == 0:
+if args.rule in ["Entropy", "Margin"]:
     args.subset = 39000
 if args.seed == True:
     args.trials = 1
@@ -885,7 +885,7 @@ if __name__ == '__main__':
 
         if args.everyinit:
             timestr = "./initials/" + args.data +'_'+ time.strftime("%m%d-%H%M%S")
-            torch.save(resnet18.state_dict(), timestr + '.pth')
+            state_dict = resnet18.state_dict()
         if args.lamb7 != 0:
             netG = Generator().to('cuda')
             netG.apply(weights_init)
@@ -901,7 +901,7 @@ if __name__ == '__main__':
         # Active learning cycles
         for cycle in range(CYCLES):
             if args.everyinit:
-                resnet18.load_state_dict(torch.load(timestr + '.pth'))
+                resnet18.load_state_dict(state_dict)
                 resnet18.eval()
             # Loss, criterion and scheduler (re)initialization
             criterion      = nn.CrossEntropyLoss(reduction='none')
@@ -944,7 +944,7 @@ if __name__ == '__main__':
 
             # Randomly sample 10000 unlabeled data points
             random.shuffle(unlabeled_set)
-            if args.lamb1 !=0:
+            if args.rule in ['PredictedLoss', 'lrl']:
                 subset = unlabeled_set[:SUBSET]
             else:
                 subset = unlabeled_set
@@ -989,7 +989,7 @@ if __name__ == '__main__':
                 
                 added_set = list(torch.tensor(subset)[arg][-ADDENDUM:].numpy())
                 labeled_set += list(torch.tensor(subset)[arg][-ADDENDUM:].numpy())
-                if args.lamb1 !=0:
+                if args.rule in ['PredictedLoss', 'lrl']:
                     unlabeled_set = list(torch.tensor(subset)[arg][:-ADDENDUM].numpy()) + unlabeled_set[SUBSET:]
                 else:
                     unlabeled_set = list(torch.tensor(subset)[arg][:-ADDENDUM].numpy())
@@ -1066,7 +1066,10 @@ if __name__ == '__main__':
 #                 },
 #                 './temp'+args.data+'_'+str(trial)+'.pth' )
         if args.everyinit:
-            os.remove(timestr+ '.pth')
+            try:
+                os.remove(timestr+ '.pth')
+            except:
+                pass
         
         
     timestr = "./results/"+args.data + time.strftime("%Y%m%d-%H%M%S")
