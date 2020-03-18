@@ -235,6 +235,35 @@ def LossPredLoss(input, target, margin=1.0, reduction='mean'):
     
     return loss
 
+def CustomTripletLoss(input, target, margin=1.0, reduction='mean'):
+    n = input.size(0)
+    assert n % 3 ==0, 'the batch size is not multiple of 3.'
+    
+    loss = 0.
+    epsilon = 1e-6
+    a=0
+    b=0
+    for i in range(n//3):
+        t1, t2 = torch.sort(input[3*i:3*i+3])
+        p1, p2 = torch.sort(target[3*i:3*i+3])
+#         print('t1',t1)
+#         print('p1',p1)
+        if torch.all(t2.eq(p2)):
+            _target = torch.log(p1[2]-p1[1]+epsilon) - torch.log(p1[1]-p1[0]+epsilon)
+            _target = _target.detach()
+#             temp = (torch.log(t1[2].detach()-t1[1]+epsilon) - torch.log(t1[1]-t1[0].detach()+epsilon) - _target).pow(2)
+            temp = (torch.log(t1[2]-t1[1]+epsilon) - torch.log(t1[1]-t1[0]+epsilon) - _target).pow(2)
+#             print(temp.item())
+            loss += temp
+            a+=1
+        else:
+            b+=1
+#             loss += torch.clamp(t1[0]-t1[2]+1, min=0)
+            loss += torch.clamp(t1[1]+2*t1[0]-3*t1[2]+1, min=0)
+#     print('a','b',a,b)
+    
+    return loss / n
+
 def TripletLoss(input, label, margin=1.0, tripletlog = False, tripletratio = False, numtriplet = 200):
     
     m = input.size()[0]-1
@@ -677,6 +706,10 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
                 errD = GAN(inputs, fake, models, optimizers, labels = labels)
 #             loss += args.lamb7 * errD
 #             print('errD',errD.item())
+        
+        if args.lamb9 != 0:
+            loss1 = CustomTripletLoss(pred_loss, target_loss, margin=MARGIN)
+            loss += args.lamb1 * loss1
 
         loss.backward()
         optimizers['backbone'].step()
