@@ -58,12 +58,12 @@ parser.add_argument('--is_norm', action='store_true', default = False)
 parser.add_argument('--lamb2', type=float, default = 0)
 parser.add_argument('--data', type=str, default = "CIFAR10")
 parser.add_argument('--lamb1', type=float, default = 0)
-parser.add_argument('--lamb3', type=float, default = 0)
 parser.add_argument('--lamb5', type=float, default = 0)
 parser.add_argument('--lamb6', type=float, default = 0)
 parser.add_argument('--lamb7', type=float, default = 0)
 parser.add_argument('--lamb8', type=float, default = 0)
 parser.add_argument('--lamb9', type=float, default = 0)
+parser.add_argument('--lambt', type=float, default = 0)
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
@@ -71,12 +71,15 @@ parser.add_argument('--savegan', action='store_true', default = False)
 parser.add_argument('--printdata', action='store_true', default = False)
 parser.add_argument('--nolog', action='store_true', default = False)
 
+#### for triplet
+parser.add_argument('--lamb3', type=float, default = 0)
 parser.add_argument('--triplet', action='store_true', default = False)
 parser.add_argument('--tripletlog', action='store_true', default = False)
 parser.add_argument('--tripletratio', action='store_true', default = False)
 parser.add_argument('--numtriplet', type=int, default = 200)
 parser.add_argument('--liftedstructured','--ls', action='store_true', default = False)
 
+#### for Loss triplet
 parser.add_argument('--lamb4', type=float, default = 0)
 parser.add_argument('--Ltriplet', action='store_true', default = False)
 parser.add_argument('--Ltripletlog', action='store_true', default = False)
@@ -85,14 +88,13 @@ parser.add_argument('--Lnumtriplet', type=int, default = 200)
 parser.add_argument('--Lliftedstructured','--Lls', action='store_true', default = False)
 
 args = parser.parse_args()
+#### default setup
 if args.triplet:
     args.nolog = True
 args.embed2embed = True
 args.is_norm = True
 args.no_square = False
 pdist = L2dist(2)
-if args.rule in ["Entropy", "Margin"]:
-    args.subset = 39000
 if args.seed == True:
     args.trials = 1
 if args.Ltripletlog or args.Ltripletratio:
@@ -110,7 +112,7 @@ softmax = nn.Softmax(dim=1)
 print(args)
 assert not args.triplet or not args.liftedstructured, "Don't use both Triplet and SiftedStructured Losses together"
 ##
-# Data
+#### Data preparation
 if args.data == "CIFAR10":
     Nor = T.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])
 elif args.data == "CIFAR100":
@@ -246,23 +248,38 @@ def CustomTripletLoss(input, target, margin=1.0, reduction='mean'):
     for i in range(n//3):
         t1, t2 = torch.sort(input[3*i:3*i+3])
         p1, p2 = torch.sort(target[3*i:3*i+3])
-#         print('t1',t1)
-#         print('p1',p1)
         if torch.all(t2.eq(p2)):
             _target = torch.log(p1[2]-p1[1]+epsilon) - torch.log(p1[1]-p1[0]+epsilon)
             _target = _target.detach()
 #             temp = (torch.log(t1[2].detach()-t1[1]+epsilon) - torch.log(t1[1]-t1[0].detach()+epsilon) - _target).pow(2)
-            temp = (torch.log(t1[2]-t1[1]+epsilon) - torch.log(t1[1]-t1[0]+epsilon) - _target).pow(2)
-#             print(temp.item())
+            temp = (torch.log( t1[2] -t1[1]+epsilon) - torch.log(t1[1]-t1[0]+epsilon) - _target).pow(2)
             loss += temp
             a+=1
         else:
             b+=1
-#             loss += torch.clamp(t1[0]-t1[2]+1, min=0)
-            loss += torch.clamp(t1[1]+2*t1[0]-3*t1[2]+1, min=0)
+            pair = dict(zip(target[3*i:3*i+3].cpu().detach().numpy(), input[3*i:3*i+3]))
+            loss += torch.clamp(pair[p1[0].item()]-pair[p1[2].item()]+1, min=0)
+#             loss += torch.clamp(pair[p1[1].item()]+2*pair[p1[0].item()]-3*pair[p1[2].item()]+1, min=0)
 #     print('a','b',a,b)
     
     return loss / n
+
+def LossTripletLoss(input, target, margin=1.0, reduction='mean'):
+    n = input.size(0)
+    assert n % 3 ==0, 'the batch size is not multiple of 3.'
+    
+    loss = 0.
+    epsilon = 1e-6
+    for i in range(n//3):
+        threeinput = input[3*i:3*i+3]
+        threetarget = target[3*i:3*i+3]
+        _target = torch.log((threetarget[2]-threetarget[1]).abs()+epsilon) - torch.log((threetarget[1]-threetarget[0]).abs()+epsilon)
+        _target = _target.detach()
+        temp = (torch.log( (threeinput[2] - threeinput[1]).abs()+epsilon) - torch.log((threeinput[1]-threeinput[0]).abs()+epsilon) - _target).pow(2)
+        loss += temp
+    
+    return loss / n
+
 
 def TripletLoss(input, label, margin=1.0, tripletlog = False, tripletratio = False, numtriplet = 200):
     
@@ -708,8 +725,11 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
 #             print('errD',errD.item())
         
         if args.lamb9 != 0:
-            loss1 = CustomTripletLoss(pred_loss, target_loss, margin=MARGIN)
-            loss += args.lamb1 * loss1
+            loss9 = CustomTripletLoss(pred_loss, target_loss.detach(), margin=MARGIN)
+            loss += args.lamb9 * loss9
+        if args.lambt != 0:
+            losst = LossTripletLoss(pred_loss, target_loss.detach(), margin=MARGIN)
+            loss += args.lambt * losst
 
         loss.backward()
         optimizers['backbone'].step()
@@ -741,12 +761,12 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         
         # Visualize
         M_module_loss = 0
-        for i in range(1,8):
-            try:
-                M_module_loss += eval('loss{}.item()'.format(i))
-            except:
-                pass
         if (iters % 100 == 0) and (vis != None) and (plot_data != None):
+            for i in [0,1,2,3,4,5,6,7,8,9,'t']:
+                try:
+                    M_module_loss += eval('loss{}.item()'.format(i))
+                except:
+                    pass
             plot_data['X'].append(iters)
             plot_data['Y'].append([
                 m_backbone_loss,
