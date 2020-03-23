@@ -1,5 +1,3 @@
-# 
-
 # Requirements
  torch >= 1.1.0
 
@@ -10,6 +8,8 @@
  visdom >= 0.1.8.8
  
  torchvision == 0.2.1
+ 
+ download STL10 dataset b4 using it.
 
 # To Activate Visdom Server
   visdom -port 9000
@@ -33,13 +33,9 @@
 * --everyinit : Fix initial weights at every cycle.
 * --cycle (default 10) : The number of cycles
 * --trials (default 4) : The number of trials
+* --query (default 1000) : The number of queries at every cycle.
 * --softmax (default False) : use (10-dim) softmax outputs of backbone model instead of 512-dim feature embeddings.
 
-# Reference
-
- Original reproduction of Learning Loss for Active Learning [Yoo et al. 2019 CVPR] : https://github.com/Mephisto405/Learning-Loss-for-Active-Learning
- Its reproduced results
- ![Results](./results.PNG)
  
 # Example Codes
 
@@ -53,12 +49,43 @@ python3 main.py --lamb1=1 --rule PredictedLoss --data CIFAR10 --query=1000 --tri
 python3 main.py --lamb1=1 --rule PredictedLoss --everyinit
 ```
 
-* regularization : TripletLoss with Loss
+* Regularization : TripletLoss with Loss (When you use this Loss, batch size and query should be multiple of 3.)
 * Strategy : Random
 ```
-python3 main.py --lambt=1 --rule Random
+python3 main.py --lambt=1 --rule Random --query=999 --batch=126
 ```
 * Strategy : Entropy
 ```
-python3 main.py --lambt=1 --rule Entorpy
+python3 main.py --lambt=1 --rule Entorpy --query=999 --batch=126
 ```
+
+# Additional Codes
+* Regularization : LogRatioLoss
+* Strategy : LogRatioLoss pick
+* Dataset : CIFAR100
+```python3 main.py --lamb2=1 --rule lrl --data CIFAR100
+```
+* Regularization : Triplet Loss on Backbone Embeddings
+* Strategy : Margin
+* Dataset : FashionMNIST
+```python3 main.py --lamb3=1 --triplet --rule Margin --data FashionMNIST
+```
+
+* Regularization : TripletLog Loss on Loss Embeddings
+* Strategy : LogRatioLoss pick
+* Dataset : STL10
+```python3 main.py --lamb4=1 --Ltripletlog --rule lrl --data STL10
+```
+* Regularization : LiftedStructured Loss on Loss Embeddings
+* Strategy : LogRatioLoss pick
+* Dataset : SVHN
+* Fix seed
+```python3 main.py --lamb4=1 --Lls --rule lrl --data SVHN --seed
+```
+
+
+# Reference
+
+ Original reproduction of Learning Loss for Active Learning [Yoo et al. 2019 CVPR] : https://github.com/Mephisto405/Learning-Loss-for-Active-Learning
+ Its reproduced results
+ ![Results](./results.PNG)
