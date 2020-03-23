@@ -1,3 +1,5 @@
+# 
+
 # Requirements
  torch >= 1.1.0
 
@@ -38,3 +40,17 @@
  Original reproduction of Learning Loss for Active Learning [Yoo et al. 2019 CVPR] : https://github.com/Mephisto405/Learning-Loss-for-Active-Learning
  Its reproduced results
  ![Results](./results.PNG)
+ 
+# Example Codes
+
+* Learning Loss for Active Learning.
+> python3 main.py --lamb1=1 --rule PredictedLoss --data CIFAR10 --query=1000 --trials=4
+
+* Learning Loss for Active Learning with initialization at every cycle.
+> python3 main.py --lamb1=1 --rule PredictedLoss --everyinit
+
+* regularization : TripletLoss with Loss
+* Strategy : Random
+> python3 main.py --lambt=1 --rule Random
+* Strategy : Entropy
+> python3 main.py --lambt=1 --rule Entorpy
