@@ -44,13 +44,21 @@
 # Example Codes
 
 * Learning Loss for Active Learning.
-> python3 main.py --lamb1=1 --rule PredictedLoss --data CIFAR10 --query=1000 --trials=4
+```
+python3 main.py --lamb1=1 --rule PredictedLoss --data CIFAR10 --query=1000 --trials=4
+```
 
 * Learning Loss for Active Learning with initialization at every cycle.
-> python3 main.py --lamb1=1 --rule PredictedLoss --everyinit
+```
+python3 main.py --lamb1=1 --rule PredictedLoss --everyinit
+```
 
 * regularization : TripletLoss with Loss
 * Strategy : Random
-> python3 main.py --lambt=1 --rule Random
+```
+python3 main.py --lambt=1 --rule Random
+```
 * Strategy : Entropy
-> python3 main.py --lambt=1 --rule Entorpy
+```
+python3 main.py --lambt=1 --rule Entorpy
+```
