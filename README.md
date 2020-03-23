@@ -1,9 +1,3 @@
-# Learning Loss for Active Learning
- Reproducing experimental results of LL4AL [Yoo et al. 2019 CVPR]
-
-# Reproduced Results
- ![Results](./results.PNG)
-
 # Requirements
  torch >= 1.1.0
 
@@ -12,13 +6,11 @@
  tqdm >= 4.31.1
 
  visdom >= 0.1.8.8
+ 
+ torchvision == 0.2.1
 
 # To Activate Visdom Server
   visdom -port 9000
-
-  or 
-
-  python -m visdom.server -port 9000
 
 # Parameters
 
@@ -40,3 +32,9 @@
 * --cycle (default 10) : The number of cycles
 * --trials (default 4) : The number of trials
 * --softmax (default False) : use (10-dim) softmax outputs of backbone model instead of 512-dim feature embeddings.
+
+# Reference
+
+ Original reproduction of Learning Loss for Active Learning [Yoo et al. 2019 CVPR] : https://github.com/Mephisto405/Learning-Loss-for-Active-Learning
+ Its reproduced results
+ ![Results](./results.PNG)
