@@ -63,24 +63,28 @@ python3 main.py --lambt=1 --rule Entorpy --query=999 --batch=126
 * Regularization : LogRatioLoss
 * Strategy : LogRatioLoss pick
 * Dataset : CIFAR100
-```python3 main.py --lamb2=1 --rule lrl --data CIFAR100
+```
+python3 main.py --lamb2=1 --rule lrl --data CIFAR100
 ```
 * Regularization : Triplet Loss on Backbone Embeddings
 * Strategy : Margin
 * Dataset : FashionMNIST
-```python3 main.py --lamb3=1 --triplet --rule Margin --data FashionMNIST
+```
+python3 main.py --lamb3=1 --triplet --rule Margin --data FashionMNIST
 ```
 
 * Regularization : TripletLog Loss on Loss Embeddings
 * Strategy : LogRatioLoss pick
 * Dataset : STL10
-```python3 main.py --lamb4=1 --Ltripletlog --rule lrl --data STL10
+```
+python3 main.py --lamb4=1 --Ltripletlog --rule lrl --data STL10
 ```
 * Regularization : LiftedStructured Loss on Loss Embeddings
 * Strategy : LogRatioLoss pick
 * Dataset : SVHN
 * Fix seed
-```python3 main.py --lamb4=1 --Lls --rule lrl --data SVHN --seed
+```
+python3 main.py --lamb4=1 --Lls --rule lrl --data SVHN --seed
 ```
 
 
