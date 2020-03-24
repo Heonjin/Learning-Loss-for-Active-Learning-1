@@ -725,10 +725,12 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
 #             print('errD',errD.item())
         
         if args.lamb9 != 0:
-            loss9 = CustomTripletLoss(pred_loss, target_loss.detach(), margin=MARGIN)
+            target_loss = target_loss.detach()
+            loss9 = CustomTripletLoss(pred_loss, target_loss, margin=MARGIN)
             loss += args.lamb9 * loss9
         if args.lambt != 0:
-            losst = LossTripletLoss(pred_loss, target_loss.detach(), margin=MARGIN)
+            target_loss = target_loss.detach()
+            losst = LossTripletLoss(pred_loss, target_loss, margin=MARGIN)
             loss += args.lambt * losst
 
         loss.backward()
