@@ -16,7 +16,7 @@
 
 # Parameters
 
-* --data (default CIFAR10): choose dataset out of CIFAR10, CIFAR100, MNIST, FashionMNIST, SVHN, STL10, IMAGENET
+* --data (default CIFAR10): choose dataset out of CIFAR10, CIFAR100, MNIST, FashionMNIST, SVHN, STL10, TINY(TinyImageNet), IMAGENET(Note that TINY and IMAGENET should be downloaded by yourself at directories '.' and '/nas/Public/', respectively.
 * --model (default resnet18): Backbone architecture.(resnet18, resnet34)
 * --rule (default Random) : picking rule/strategy.(Random, PredictedLoss, Entorpy, Margin, lrl)
 * --lamb1 : Hyperparameter for MarginRankingLoss
