@@ -12,10 +12,10 @@ class LossNet(nn.Module):
     def __init__(self, feature_sizes=[32, 16, 8, 4], num_channels=[64, 128, 256, 512], interm_dim=128, num_classes=0):
         super(LossNet, self).__init__()
         
-        self.GAP1 = nn.AvgPool2d(feature_sizes[0])
-        self.GAP2 = nn.AvgPool2d(feature_sizes[1])
-        self.GAP3 = nn.AvgPool2d(feature_sizes[2])
-        self.GAP4 = nn.AvgPool2d(feature_sizes[3])
+#         self.GAP1 = nn.AvgPool2d(feature_sizes[0])
+#         self.GAP2 = nn.AvgPool2d(feature_sizes[1])
+#         self.GAP3 = nn.AvgPool2d(feature_sizes[2])
+#         self.GAP4 = nn.AvgPool2d(feature_sizes[3])
 
         self.FC1 = nn.Linear(num_channels[0], interm_dim)
         self.FC2 = nn.Linear(num_channels[1], interm_dim)
@@ -42,22 +42,23 @@ class LossNet(nn.Module):
             self.label_emb = nn.Embedding(num_classes, num_classes)
     
     def forward(self, features, labels = None):
-        out1 = self.GAP1(features[0])
+        
+        out1 = nn.AvgPool2d(features[0].size(2))(features[0])
         out1 = out1.view(out1.size(0), -1)
         out1 = F.relu(self.FC1(out1))
 #         out1 = F.relu(self.bn1(self.FC1(out1)))
 
-        out2 = self.GAP2(features[1])
+        out2 = nn.AvgPool2d(features[1].size(2))(features[1])
         out2 = out2.view(out2.size(0), -1)
         out2 = F.relu(self.FC2(out2))
 #         out2 = F.relu(self.bn2(self.FC2(out2)))
 
-        out3 = self.GAP3(features[2])
+        out3 = nn.AvgPool2d(features[2].size(2))(features[2])
         out3 = out3.view(out3.size(0), -1)
         out3 = F.relu(self.FC3(out3))
 #         out3 = F.relu(self.bn3(self.FC3(out3)))
 
-        out4 = self.GAP4(features[3])
+        out4 = nn.AvgPool2d(features[3].size(2))(features[3])
         out4 = out4.view(out4.size(0), -1)
         out4 = F.relu(self.FC4(out4))
 #         out4 = F.relu(self.bn4(self.FC4(out4)))
@@ -74,7 +75,6 @@ class LossNet(nn.Module):
             out = self.linear(out)
         else:
             out = self.linear2(self.LReLU(self.linear(out)))
-        
         return out, dim_10, dim_512
     
     def l2_norm(self,input):

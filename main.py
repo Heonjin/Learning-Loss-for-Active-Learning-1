@@ -127,6 +127,8 @@ elif args.data == "STL10":
     Nor = T.Normalize((.5, .5, .5), (.5, .5, .5))
 elif args.data == "IMAGENET":
     Nor = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+elif args.data == "TINY":
+    Nor = T.Normalize((0.4802, 0.4481, 0.3975), (0.2302, 0.2265, 0.2262))
 elif args.data == "LSUN":
     Nor = T.Normalize((.5, .5, .5), (.5, .5, .5))
 train_transform = T.Compose([
@@ -170,15 +172,14 @@ elif args.data == "LSUN":
 elif args.data == "STL10":
     train_transform = T.Compose([
 #         T.Pad(4),
-#         T.RandomCrop(size=96),
-        T.RandomCrop(size=32),
+#         T.RandomCrop(size=32),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         Nor
         ])
     test_transform = T.Compose([
-        T.Resize(40),
-        T.CenterCrop(size=32),
+#         T.Resize(40),
+#         T.CenterCrop(size=32),
         T.ToTensor(),
         Nor,
     ])
@@ -190,16 +191,15 @@ elif args.data == "STL10":
     SUBSET = 3000
 elif args.data == "IMAGENET":
     train_transform = T.Compose([
-#         T.Pad(4),
-#         T.RandomCrop(size=96),
-        T.RandomCrop(size=32),
+        T.Resize(224),
+        T.Pad(4),
+        T.RandomCrop(size=224),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         Nor
         ])
     test_transform = T.Compose([
-        T.Resize(40),
-        T.CenterCrop(size=32),
+        T.Resize(224),
         T.ToTensor(),
         Nor,
     ])
@@ -207,6 +207,25 @@ elif args.data == "IMAGENET":
     cifar10_train = ImageFolder('/nas/Public/imagenet/train', transform=train_transform)
     cifar10_unlabeled = ImageFolder('/nas/Public/imagenet/train', transform=test_transform)
     cifar10_test  = ImageFolder('/nas/Public/imagenet/val/ILSVRC2012-val', transform=test_transform)
+    NUM_TRAIN = len(cifar10_train)
+elif args.data == "TINY":
+    train_transform = T.Compose([
+        T.Pad(4),
+        T.RandomCrop(size=64),
+        T.RandomHorizontalFlip(),
+        T.ToTensor(),
+        Nor
+        ])
+    test_transform = T.Compose([
+#         T.Resize(40),
+#         T.CenterCrop(size=32),
+        T.ToTensor(),
+        Nor,
+    ])
+
+    cifar10_train = ImageFolder('./tiny-imagenet-200/train', transform=train_transform)
+    cifar10_unlabeled = ImageFolder('./tiny-imagenet-200/train', transform=test_transform)
+    cifar10_test  = ImageFolder('./tiny-imagenet-200/val', transform=test_transform)
     NUM_TRAIN = len(cifar10_train)
 
 transform = T.Compose(
@@ -921,6 +940,8 @@ if __name__ == '__main__':
         # Model
         if args.data == "CIFAR100":
             num_classes=100; in_channel=3
+        elif args.data == "TINY":
+            num_classes=200; in_channel=3
         elif args.data in ["CIFAR10","SVHN","STL10"]:
             num_classes=10; in_channel=3
         elif args.data == "IMAGENET":
@@ -967,6 +988,8 @@ if __name__ == '__main__':
             if args.lamb7 or args.lamb8:
                 optimizerG = optim.Adam(netG.parameters(), lr=0.0002, betas=(beta1, 0.999))
                 optimizerD = optim.Adam(models['backbone'].parameters(), lr=0.0002, betas=(beta1, 0.999))
+            if args.data=="TINY":
+                optim_backbone = optim.Adam(models['backbone'].parameters(), lr=0.001, betas=(0.9, 0.999))
             sched_backbone = lr_scheduler.MultiStepLR(optim_backbone, milestones=MILESTONES)
             sched_module   = lr_scheduler.MultiStepLR(optim_module, milestones=MILESTONES)
 
