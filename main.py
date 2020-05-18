@@ -37,6 +37,8 @@ import models.resnet as resnet
 import models.lossnet as lossnet
 from config import *
 from data.sampler import SubsetSequentialSampler
+from MetricLosses import contrastive, triplet, sup_triplet1d, mc_triplet1d
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--lrl', action='store_true', default = False)  # AL pool
@@ -64,6 +66,7 @@ parser.add_argument('--lamb7', type=float, default = 0)
 parser.add_argument('--lamb8', type=float, default = 0)
 parser.add_argument('--lamb9', type=float, default = 0)
 parser.add_argument('--lambt', type=float, default = 0)
+parser.add_argument('--lambmc', type=float, default = 0)
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
@@ -280,22 +283,6 @@ def CustomTripletLoss(input, target, margin=1.0, reduction='mean'):
             loss += torch.clamp(pair[p1[0].item()]-pair[p1[2].item()]+1, min=0)
 #             loss += torch.clamp(pair[p1[1].item()]+2*pair[p1[0].item()]-3*pair[p1[2].item()]+1, min=0)
 #     print('a','b',a,b)
-    
-    return loss / n
-
-def LossTripletLoss(input, target, margin=1.0, reduction='mean'):
-    n = input.size(0)
-    assert n % 3 ==0, 'the batch size is not multiple of 3.'
-    
-    loss = 0.
-    epsilon = 1e-6
-    for i in range(n//3):
-        threeinput = input[3*i:3*i+3]
-        threetarget = target[3*i:3*i+3]
-        _target = torch.log((threetarget[2]-threetarget[1]).abs()+epsilon) - torch.log((threetarget[1]-threetarget[0]).abs()+epsilon)
-        _target = _target.detach()
-        temp = (torch.log( (threeinput[2] - threeinput[1]).abs()+epsilon) - torch.log((threeinput[1]-threeinput[0]).abs()+epsilon) - _target).pow(2)
-        loss += temp
     
     return loss / n
 
@@ -749,8 +736,12 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             loss += args.lamb9 * loss9
         if args.lambt != 0:
             target_loss = target_loss.detach()
-            losst = LossTripletLoss(pred_loss, target_loss, margin=MARGIN)
+            losst = sup_triplet1d(pred_loss, target_loss, margin=MARGIN)
             loss += args.lambt * losst
+        if args.lambmc != 0:
+            target_loss = target_loss.detach()
+            lossmc = mc_triplet1d(pred_loss, labels)
+            loss += args.lambmc * lossmc
 
         loss.backward()
         optimizers['backbone'].step()
@@ -782,8 +773,8 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         
         # Visualize
         M_module_loss = 0
-        if (iters % 100 == 0) and (vis != None) and (plot_data != None):
-            for i in [0,1,2,3,4,5,6,7,8,9,'t']:
+        if (iters % 10 == 0) and (vis != None) and (plot_data != None):
+            for i in [0,1,2,3,4,5,6,7,8,9,'t','mc']:
                 try:
                     M_module_loss += eval('loss{}.item()'.format(i))
                 except:
