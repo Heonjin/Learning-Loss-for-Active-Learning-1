@@ -3,3 +3,7 @@ from .triplet import triplet
 from .lifted_structured import lifted_structured
 from .sup_triplet1d import sup_triplet1d
 from .mc_triplet1d import mc_triplet1d
+from .mc_triplet_log1d import mc_triplet_log1d
+from .mc_triplet_ratio1d import mc_triplet_ratio1d
+from .lifted_structured1d import LiftedStructureLoss
+from .NCA1d import NCALoss
