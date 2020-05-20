@@ -37,7 +37,7 @@ import models.resnet as resnet
 import models.lossnet as lossnet
 from config import *
 from data.sampler import SubsetSequentialSampler
-from MetricLosses import contrastive, triplet, sup_triplet1d, mc_triplet1d
+from MetricLosses import contrastive, triplet, sup_triplet1d, mc_triplet1d, mc_triplet_log1d, mc_triplet_ratio1d, LiftedStructureLoss, NCALoss
 
 
 parser = argparse.ArgumentParser()
@@ -53,6 +53,7 @@ parser.add_argument('--model', type=str, default = "resnet18")
 parser.add_argument('--trials', type=int, default = TRIALS)
 parser.add_argument('--embedding', action='store_true', default = False)
 parser.add_argument('--everyinit', action='store_true', default = False)
+parser.add_argument('--margin', type=float, default = 1.0)
 
 parser.add_argument('--softmax', action='store_true', default = False)
 parser.add_argument('--onehot', action='store_true', default = False)
@@ -67,6 +68,11 @@ parser.add_argument('--lamb8', type=float, default = 0)
 parser.add_argument('--lamb9', type=float, default = 0)
 parser.add_argument('--lambt', type=float, default = 0)
 parser.add_argument('--lambmc', type=float, default = 0)
+parser.add_argument('--lambmc_log', type=float, default = 0)
+parser.add_argument('--lambmc_ratio', type=float, default = 0)
+parser.add_argument('--lambls', type=float, default = 0)
+parser.add_argument('--lambnca', type=float, default = 0)
+
 parser.add_argument('--seed', action='store_true', default = False)
 parser.add_argument('--lrlbatch', type=int, default = 128)
 parser.add_argument('--savedata', action='store_true', default = False)
@@ -111,6 +117,7 @@ SUBSET = args.subset
 TRIALS = args.trials
 WEIGHT = args.lamb1
 BATCH = args.batch
+MARGIN = args.margin
 softmax = nn.Softmax(dim=1)
 print(args)
 assert not args.triplet or not args.liftedstructured, "Don't use both Triplet and SiftedStructured Losses together"
@@ -332,7 +339,7 @@ def TripletLoss(input, label, margin=1.0, tripletlog = False, tripletratio = Fal
     else:
         return 0
 
-def LiftedStructureLoss(inputs, targets, off=0.2, alpha=1, beta=2, margin=0.5, hard_mining=None):
+def LiftedStructureLoss2(inputs, targets, off=0.2, alpha=1, beta=2, margin=0.5, hard_mining=None):
 #     alpha=40
     n = inputs.size(0)
     
@@ -740,8 +747,25 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             loss += args.lambt * losst
         if args.lambmc != 0:
             target_loss = target_loss.detach()
-            lossmc = mc_triplet1d(pred_loss, labels)
+            lossmc = mc_triplet1d(pred_loss, labels, margin=MARGIN)
             loss += args.lambmc * lossmc
+        if args.lambmc_log != 0:
+            target_loss = target_loss.detach()
+            lossmc_log = mc_triplet_log1d(pred_loss, labels, margin=MARGIN)
+            loss += args.lambmc * lossmc_log
+        if args.lambmc_ratio != 0:
+            target_loss = target_loss.detach()
+            lossmc_ratio = mc_triplet_ratio1d(pred_loss, labels, margin=MARGIN)
+            loss += args.lambmc * lossmc_ratio
+        if args.lambls != 0:
+            target_loss = target_loss.detach()
+            lossls = LiftedStructureLoss(alpha=1,beta=1)(pred_loss, labels)[0]
+            loss += args.lambls * lossls
+        if args.lambnca != 0:
+            target_loss = target_loss.detach()
+            lossnca = NCALoss(alpha=1)(pred_loss, labels)[0]
+            print(lossnca.item())
+            loss += args.lambnca * lossnca
 
         loss.backward()
         optimizers['backbone'].step()
@@ -774,7 +798,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         # Visualize
         M_module_loss = 0
         if (iters % 10 == 0) and (vis != None) and (plot_data != None):
-            for i in [0,1,2,3,4,5,6,7,8,9,'t','mc']:
+            for i in [0,1,2,3,4,5,6,7,8,9,'t','mc','mc_log','ls','nca']:
                 try:
                     M_module_loss += eval('loss{}.item()'.format(i))
                 except:

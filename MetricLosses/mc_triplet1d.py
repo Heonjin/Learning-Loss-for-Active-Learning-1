@@ -15,11 +15,11 @@ def mc_triplet1d(input, classes, margin=0., mining_threshold = 8):
             for k in range(j+1,n):
                 dif = diff[i][j] - diff[i][k]
                 if classes[i] == classes[j] and classes[i] != classes[k] and dif.item()> -margin:
-                    temp = dif
+                    temp = dif+margin
                     loss += temp
                     count += 1
                 elif classes[i] == classes[k] and classes[i] != classes[j] and dif.item() < margin :
-                    temp = -dif
+                    temp = -dif+margin
                     loss += temp
                     count += 1
                 else:
